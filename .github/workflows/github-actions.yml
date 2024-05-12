@@ -1,0 +1,227 @@
+name: build
+on: [push, pull_request]
+jobs:
+  test_n_build_wheel:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 'check'
+            python: '3.11'
+            toxpython: 'python3.11'
+            tox_env: 'check'
+            os: 'ubuntu-latest'
+          - name: 'docs'
+            python: '3.11'
+            toxpython: 'python3.11'
+            tox_env: 'docs'
+            os: 'ubuntu-latest'
+          - name: 'py38 (ubuntu/x86_64)'
+            python: '3.8'
+            toxpython: 'python3.8'
+            python_arch: 'x64'
+            tox_env: 'py38'
+            cibw_arch: 'x86_64'
+            cibw_build: false
+            os: 'ubuntu-latest'
+          - name: 'py38 (windows/AMD64)'
+            python: '3.8'
+            toxpython: 'python3.8'
+            python_arch: 'x64'
+            tox_env: 'py38'
+            cibw_arch: 'AMD64'
+            cibw_build: false
+            os: 'windows-latest'
+          - name: 'py38 (macos/arm64)'
+            python: '3.8'
+            toxpython: 'python3.8'
+            python_arch: 'arm64'
+            tox_env: 'py38'
+            cibw_arch: 'arm64'
+            cibw_build: false
+            os: 'macos-latest'
+          - name: 'py39 (ubuntu/x86_64)'
+            python: '3.9'
+            toxpython: 'python3.9'
+            python_arch: 'x64'
+            tox_env: 'py39'
+            cibw_arch: 'x86_64'
+            cibw_build: false
+            os: 'ubuntu-latest'
+          - name: 'py39 (windows/AMD64)'
+            python: '3.9'
+            toxpython: 'python3.9'
+            python_arch: 'x64'
+            tox_env: 'py39'
+            cibw_arch: 'AMD64'
+            cibw_build: false
+            os: 'windows-latest'
+          - name: 'py39 (macos/arm64)'
+            python: '3.9'
+            toxpython: 'python3.9'
+            python_arch: 'arm64'
+            tox_env: 'py39'
+            cibw_arch: 'arm64'
+            cibw_build: false
+            os: 'macos-latest'
+          - name: 'py310 (ubuntu/x86_64)'
+            python: '3.10'
+            toxpython: 'python3.10'
+            python_arch: 'x64'
+            tox_env: 'py310'
+            cibw_arch: 'x86_64'
+            cibw_build: false
+            os: 'ubuntu-latest'
+          - name: 'py310 (windows/AMD64)'
+            python: '3.10'
+            toxpython: 'python3.10'
+            python_arch: 'x64'
+            tox_env: 'py310'
+            cibw_arch: 'AMD64'
+            cibw_build: false
+            os: 'windows-latest'
+          - name: 'py310 (macos/arm64)'
+            python: '3.10'
+            toxpython: 'python3.10'
+            python_arch: 'arm64'
+            tox_env: 'py310'
+            cibw_arch: 'arm64'
+            cibw_build: false
+            os: 'macos-latest'
+          - name: 'py311 (ubuntu/x86_64)'
+            python: '3.11'
+            toxpython: 'python3.11'
+            python_arch: 'x64'
+            tox_env: 'py311'
+            cibw_arch: 'x86_64'
+            cibw_build: false
+            os: 'ubuntu-latest'
+          - name: 'py311 (windows/AMD64)'
+            python: '3.11'
+            toxpython: 'python3.11'
+            python_arch: 'x64'
+            tox_env: 'py311'
+            cibw_arch: 'AMD64'
+            cibw_build: false
+            os: 'windows-latest'
+          - name: 'py311 (macos/arm64)'
+            python: '3.11'
+            toxpython: 'python3.11'
+            python_arch: 'arm64'
+            tox_env: 'py311'
+            cibw_arch: 'arm64'
+            cibw_build: false
+            os: 'macos-latest'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5.1.0
+      with:
+        python-version: ${{ matrix.python }}
+        architecture: ${{ matrix.python_arch }}
+    - name: install dependencies
+      run: |
+        python -mpip install --progress-bar=off -r ci/requirements.txt
+        virtualenv --version
+        pip --version
+        tox --version
+        pip list --format=freeze
+    - name: cibw build and test
+      if: matrix.cibw_build
+      run: cibuildwheel
+      env:
+        TOXPYTHON: '${{ matrix.toxpython }}'
+        CIBW_ARCHS: '${{ matrix.cibw_arch }}'
+        CIBW_BUILD: '${{ matrix.cibw_build }}'
+        CIBW_BUILD_VERBOSITY: '3'
+        CIBW_TEST_REQUIRES: >
+          tox
+          tox-direct
+        CIBW_TEST_COMMAND: >
+          cd {project} &&
+          tox --skip-pkg-install --direct-yolo -e ${{ matrix.tox_env }} -v
+        CIBW_TEST_COMMAND_WINDOWS: >
+          cd /d {project} &&
+          tox --skip-pkg-install --direct-yolo -e ${{ matrix.tox_env }} -v
+    - name: regular build and test
+      env:
+        TOXPYTHON: '${{ matrix.toxpython }}'
+      if: >
+        !matrix.cibw_build
+      run: >
+        tox -e ${{ matrix.tox_env }} -v
+    - name: check wheel
+      if: matrix.cibw_build
+      run: twine check wheelhouse/*.whl
+    - name: upload wheel
+      uses: actions/upload-artifact@v4
+      if: matrix.cibw_build
+      with:
+        path: wheelhouse/*.whl
+
+  coverage:
+    runs-on: ubuntu-latest
+    environment: codecov
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5.1.0
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -mpip install --progress-bar=off -r ci/requirements.txt
+          virtualenv --version
+          pip --version
+          tox --version
+          pip list --format=freeze
+      - name: Run tests and collect coverage
+        run: tox -e py310,report -v
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          verbose: true
+
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build sdist
+        run: |
+          python -mpip install --progress-bar=off pipx
+          pipx run build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          path: dist/*.tar.gz
+
+  upload_pypi:
+    needs: [test_n_build_wheel, build_sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    # upload to PyPI on every tag starting with 'v'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # alternatively, to publish when a GitHub Release is created, use the following rule:
+    # if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          # unpacks default artifact into dist/
+          # if `name: artifact` is omitted, the action will create extra parent dir
+          name: artifact
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1.8
+        with:
+          user: __token__
+          password: ${{ secrets.PIPY_TEST_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
