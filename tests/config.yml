@@ -1,0 +1,49 @@
+api:
+    endpoint: "https://porkbun.com/api/json/v3/"
+    apikey: "mock_apikey"
+    secretapikey: "mock_secretapikey"
+
+domains:
+    - name: example.com
+      records:
+        - name: ""
+          type: A
+          content: &ipv4 192.168.192.168
+        - name: autoconfig
+          type: A
+          content: *ipv4
+        - name: git
+          type: A
+          content: *ipv4
+        - name: mail
+          type: A
+          content: *ipv4
+        - name: www
+          type: A
+          content: *ipv4
+        - name: ""
+          type: MX
+          content: mail.example.com
+        - name: ""
+          type: TXT
+          content: "mock entry 1"
+        - name: test
+          type: TXT
+          content: "mock entry 2"
+        - name: ""
+          type: AAAA
+          content: &ipv6 fe80::1
+        - name: autoconfig
+          type: AAAA
+          content: *ipv6
+        - name: git
+          type: AAAA
+          content: *ipv6
+        - name: mail
+          type: AAAA
+          content: *ipv6
+        - name: www
+          type: AAAA
+          content: *ipv6
+
+

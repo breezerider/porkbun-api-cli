@@ -1,0 +1,119 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "porkbun_api_cli"
+authors = [
+    {name = "Oleksandr Ostrenko", email = "oleksandr@ostrenko.dev"},
+]
+description = "CLI client for managing domain DNS records through Porkbun API calls"
+readme = "README.rst"
+requires-python = ">=3.8"
+keywords = ["porkbun", "dns", "administration"]
+license = {text = "BSD-3-Clause"}
+classifiers = [
+    # As from http://pypi.python.org/pypi?%3Aaction=list_classifiers
+    # "Development Status :: 1 - Planning",
+    # "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
+    # "Development Status :: 4 - Beta",
+    # "Development Status :: 5 - Production/Stable",
+    # "Development Status :: 6 - Mature",
+    # "Development Status :: 7 - Inactive",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Operating System :: Unix",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "click",
+    "pyyaml",
+    "requests",
+    'importlib-metadata; python_version<"3.10"',
+]
+dynamic = ["version"]
+
+# see https://daniel.feldroy.com/posts/2023-08-pypi-project-urls-cheatsheet
+[project.urls]
+
+# Project homepage
+homepage = "https://github.com/breezerider/porkbun-api-cli"
+
+# The changelog
+changelog = "https://github.com/breezerider/porkbun-api-cli/blob/master/CHANGELOG.rst"
+
+# Any long form docs
+documentation = "https://porkbun-api-cli.readthedocs.io/"
+
+# Bugs/issues/feature requests
+issues = "https://github.com/breezerider/porkbun-api-cli/issues"
+
+
+[tool.black]
+line-length = 120
+target-version = ['py310']
+preview = true
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+combine_as_imports = true
+include_trailing_comma = false
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 120
+indent = 4
+atomic = true
+case_sensitive = false
+balanced_wrapping = false
+
+[tool.setuptools.dynamic]
+version = {attr = "porkbun_api_cli.__version__"}
+
+[project.optional-dependencies]
+pdf = ["ReportLab>=1.2", "RXP"]
+rest = ["docutils>=0.3", "pack ==1.1, ==1.3"]
+
+[project.scripts]
+porkbun-api-cli = "porkbun_api_cli.cli:main"
+
+[tool.bumpversion]
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+tag = true
+sign_tags = true
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+current_version = "0.1.1"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = [
+    "{major}.{minor}.{patch}"
+]
+search = "{current_version}"
+replace = "{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "src/porkbun_api_cli/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.rst"
+search = "Unreleased"
+replace = "{new_version} ({now:%Y-%m-%d})"
+
+[[tool.bumpversion.files]]
+filename = "README.rst"
+search = "v{current_version}"
+replace = "v{new_version}"
