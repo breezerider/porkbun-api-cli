@@ -1,0 +1,7 @@
+cibuildwheel>=2.11.2
+virtualenv>=16.6.0
+pip>=19.1.1
+setuptools>=61.0.0
+six>=1.14.0
+tox>=4.0.0
+twine>=4.0.0
