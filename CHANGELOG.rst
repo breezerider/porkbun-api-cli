@@ -2,7 +2,7 @@
 Changelog
 =========
 
-Unrelease
+Unreleased
 ------------------
 
 * Initial release on PyPI.
