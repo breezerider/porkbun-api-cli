@@ -181,7 +181,7 @@ jobs:
           tox --version
           pip list --format=freeze
       - name: Run tests and collect coverage
-        run: tox -e py310,report -v
+        run: tox -e py311,report -v
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
