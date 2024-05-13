@@ -57,7 +57,8 @@ def operation_allowed_by_mode(operation, mode):
     elif mode == "upgrade":
         return operation in ["create", "update"]
     elif mode == "replace":
-        return True
+        return operation in ["create", "update", "delete"]
+    return False
 
 
 def load_config(config_file_path):

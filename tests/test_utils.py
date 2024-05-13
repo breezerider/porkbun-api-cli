@@ -82,6 +82,11 @@ def test_operation_allowed_by_mode_allowed(operation, mode):
         ("update", "create"),
         ("update", "delete"),
         ("upgrade", "delete"),
+        ("append", "unknown"),
+        ("update", "unknown"),
+        ("upgrade", "unknown"),
+        ("replace", "unknown"),
+        ("unknown", "unknown"),
     ],
 )
 def test_operation_allowed_by_mode_not_allowed(operation, mode):
