@@ -68,6 +68,7 @@ multi_line_output = 3
 combine_as_imports = true
 include_trailing_comma = false
 force_grid_wrap = 0
+force_single_line = true
 use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 120
@@ -117,3 +118,15 @@ replace = "{new_version} ({now:%Y-%m-%d})"
 filename = "README.rst"
 search = "v{current_version}"
 replace = "v{new_version}"
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+omit = ["tests", "*__init__.py", "*__init__.pxd"]
+parallel = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+precision = 2
+omit = ["*migrations*"]
