@@ -2,6 +2,11 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+* Fixup the package
+
 0.1.0 (2024-05-12)
 ------------------
 
