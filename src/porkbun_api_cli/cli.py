@@ -143,7 +143,7 @@ def _execute_operations_plan(api, verbose, operations_plan):
             "upgrade",
         ]
     ),
-    default="append"
+    default="append",
 )
 @click.option("-n", "--dry-run", is_flag=True, help="Perform a trial run without any changes made")
 @click.option(

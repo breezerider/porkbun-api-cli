@@ -1,4 +1,5 @@
 import json
+
 import requests
 
 
@@ -7,7 +8,9 @@ class PorkbunAPI:
     def __init__(self, apikey, secretapikey, endpoint):
         self._config = {"secretapikey": secretapikey, "apikey": apikey, "endpoint": endpoint}
 
-    def _query_api(self, endpoint, payload={}, datafield=None):
+    def _query_api(self, endpoint, payload=None, datafield=None):
+        if payload is None:
+            payload = {}
         data = {**self._config, **payload}
 
         try:
@@ -29,7 +32,11 @@ class PorkbunAPI:
                             False,
                         )
                 else:
-                    return (response["message"] if "message" in response else f"invalid response from '{endpoint}': no error message provided"), False
+                    return (
+                        response["message"]
+                        if "message" in response
+                        else f"invalid response from '{endpoint}': no error message provided"
+                    ), False
             else:
                 return (
                     f"invalid response from '{endpoint}': status field not found",

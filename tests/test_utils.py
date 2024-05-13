@@ -6,7 +6,7 @@ from porkbun_api_cli import utils
 
 
 @pytest.mark.parametrize(
-    "target, other",
+    ("target", "other"),
     [
         ({"content": "some content"}, {"content": "some content"}),
         ({"content": "some content", "ttl": 600}, {"content": "some content", "ttl": 600}),
@@ -19,7 +19,7 @@ def test_compare_record_by_content_ttl_prio_equal(target, other):
 
 
 @pytest.mark.parametrize(
-    "target, other",
+    ("target", "other"),
     [
         ({"content": "target content"}, {"content": "other content"}),
         ({"content": "some content", "ttl": 6}, {"content": "some content", "ttl": 600}),
@@ -34,7 +34,7 @@ def test_compare_record_by_content_ttl_prio_unequal(target, other):
 
 
 @pytest.mark.parametrize(
-    "domain_name, target, other",
+    ("domain_name", "target", "other"),
     [
         ("equal.com", {"name": "", "type": "A"}, {"name": "equal.com", "type": "A"}),
         ("equal.com", {"name": "www", "type": "A"}, {"name": "www.equal.com", "type": "A"}),
@@ -46,7 +46,7 @@ def test_compare_record_by_name_type_equal(domain_name, target, other):
 
 
 @pytest.mark.parametrize(
-    "domain_name, target, other",
+    ("domain_name", "target", "other"),
     [
         ("unequal.com", {"name": "", "type": "A"}, {"name": "equal.com", "type": "A"}),
         ("unequal.com", {"name": "", "type": "A"}, {"name": "unequal.com", "type": "AAAA"}),
@@ -59,7 +59,7 @@ def test_compare_record_by_name_type_unequal(domain_name, target, other):
 
 
 @pytest.mark.parametrize(
-    "mode, operation",
+    ("mode", "operation"),
     [
         ("append", "create"),
         ("update", "update"),
@@ -75,7 +75,7 @@ def test_operation_allowed_by_mode_allowed(operation, mode):
 
 
 @pytest.mark.parametrize(
-    "mode, operation",
+    ("mode", "operation"),
     [
         ("append", "update"),
         ("append", "delete"),
@@ -104,7 +104,7 @@ def test_load_config_valid():
         "",
         "api:\n",
         "api:\n  apikey: 'mock_apikey'\n",
-        "api:\n  secretapikey: 'mock_secretapikey'\ndomains:\n",
+        "api:\n  secretapikey: 'mock_secretapikey'\n",
         "api:\n  apikey: 'mock_apikey'\n  secretapikey: 'mock_secretapikey'\n",
         "api:\n  apikey: 'mock_apikey'\ndomains:\n",
         "api:\n  secretapikey: 'mock_secretapikey'\ndomains:\n",
@@ -118,4 +118,4 @@ def test_load_config_invalid(data):
         with pytest.raises(
             ValueError, match="required objects 'api' and/or 'domain' with all required fields not found"
         ):
-            actual = utils.load_config("")
+            utils.load_config("")

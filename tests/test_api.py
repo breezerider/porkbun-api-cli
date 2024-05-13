@@ -1,14 +1,17 @@
 import unittest
-from unittest.mock import patch, MagicMock
-from porkbun_api_cli.api import PorkbunAPI
+from unittest.mock import Mock
+from unittest.mock import patch
+
 from requests import RequestException
+
+from porkbun_api_cli.api import PorkbunAPI
 
 
 class TestPorkbunAPI(unittest.TestCase):
 
     @patch("porkbun_api_cli.api.requests.post")
     def test_query_api_success_no_datafield(self, mock_post):
-        mock_response = MagicMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"status": "SUCCESS"}
         mock_post.return_value = mock_response
@@ -21,7 +24,7 @@ class TestPorkbunAPI(unittest.TestCase):
 
     @patch("porkbun_api_cli.api.requests.post")
     def test_query_api_success_with_datafield(self, mock_post):
-        mock_response = MagicMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"status": "SUCCESS", "datafield": "value"}
         mock_post.return_value = mock_response
@@ -34,7 +37,7 @@ class TestPorkbunAPI(unittest.TestCase):
 
     @patch("porkbun_api_cli.api.requests.post")
     def test_query_api_invalid_datafield(self, mock_post):
-        mock_response = MagicMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"status": "SUCCESS"}
         mock_post.return_value = mock_response
@@ -57,7 +60,7 @@ class TestPorkbunAPI(unittest.TestCase):
 
     @patch("porkbun_api_cli.api.requests.post")
     def test_query_api_failed_status(self, mock_post):
-        mock_response = MagicMock()
+        mock_response = Mock()
         mock_response.status_code = 400
         mock_response.json.return_value = {"status": "FAILURE", "message": "Invalid request"}
         mock_post.return_value = mock_response
@@ -70,7 +73,7 @@ class TestPorkbunAPI(unittest.TestCase):
 
     @patch("porkbun_api_cli.api.requests.post")
     def test_query_api_invalid_response_empty(self, mock_post):
-        mock_response = MagicMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {}
         mock_post.return_value = mock_response
@@ -83,7 +86,7 @@ class TestPorkbunAPI(unittest.TestCase):
 
     @patch("porkbun_api_cli.api.requests.post")
     def test_query_api_invalid_response_no_message(self, mock_post):
-        mock_response = MagicMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"status": "FAILURE"}
         mock_post.return_value = mock_response
@@ -121,16 +124,17 @@ class TestPorkbunAPI(unittest.TestCase):
         self.assertEqual(result, "record_id")
 
     def test_create_record_invalid_payload(self):
-        for args in [
-            (None, {"name": "test", "type": "A", "content": "127.0.0.1"}),
-            ("some.domain", {"name": "test", "type": "A", "magick": "42"}),
-            ("some.domain", {}),
+        for name, args in [
+            ('invalid domain', (None, {"name": "test", "type": "A", "content": "127.0.0.1"})),
+            ('invalid record', ("some.domain", {"name": "test", "type": "A", "magick": "42"})),
+            ('empty record', ("some.domain", {})),
         ]:
-            with self.assertRaises(RuntimeError) as context:
-                print(*args)
-                PorkbunAPI.create_record(None, *args)
+            with self.subTest(name):
+                with self.assertRaises(RuntimeError) as context:
+                    print(*args)
+                    PorkbunAPI.create_record(None, *args)
 
-            self.assertTrue("create_record failed: invalid input values" in str(context.exception))
+                self.assertTrue("create_record failed: invalid input values" in str(context.exception))
 
     # Mocking _query_api method for failure response
     @patch("porkbun_api_cli.api.PorkbunAPI._query_api")
@@ -151,17 +155,18 @@ class TestPorkbunAPI(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_update_record_invalid_payload(self):
-        for args in [
-            (None, "1", {"name": "test", "type": "A", "content": "127.0.0.1"}),
-            ("some.domain", None, {"name": "test", "type": "A", "content": "127.0.0.1"}),
-            ("some.domain", "2", {"name": "test", "type": "A", "magick": "42"}),
-            ("some.domain", "3", {}),
+        for name, args in [
+            ('invalid domain', (None, "1", {"name": "test", "type": "A", "content": "127.0.0.1"})),
+            ('invalid id', ("some.domain", None, {"name": "test", "type": "A", "content": "127.0.0.1"})),
+            ('invalid record', ("some.domain", "2", {"name": "test", "type": "A", "magick": "42"})),
+            ('empty record', ("some.domain", "3", {})),
         ]:
-            with self.assertRaises(RuntimeError) as context:
-                print(*args)
-                PorkbunAPI.update_record(None, *args)
+            with self.subTest(name):
+                with self.assertRaises(RuntimeError) as context:
+                    print(*args)
+                    PorkbunAPI.update_record(None, *args)
 
-            self.assertTrue("update_record failed: invalid input values" in str(context.exception))
+                self.assertTrue("update_record failed: invalid input values" in str(context.exception))
 
     # Mocking _query_api method for failure response
     @patch("porkbun_api_cli.api.PorkbunAPI._query_api")

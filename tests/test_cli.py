@@ -1,14 +1,15 @@
 import sys
+from unittest import TestCase
+from unittest.mock import Mock
+from unittest.mock import call
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
-from unittest import TestCase
-from unittest.mock import Mock, patch, call
-
-from porkbun_api_cli import __version__, cli, api
-
-# , utils
+from porkbun_api_cli import __version__
+from porkbun_api_cli import api
+from porkbun_api_cli import cli
 
 
 @pytest.fixture
@@ -58,7 +59,13 @@ def test_cli_dry_run(runner, monkeypatch):
 
     assert result.exit_code == 0
     assert not result.exception
-    assert result.output.strip() == '\n'.join(["dry run requested, enable verbose output", "IP address reported by API 'some-ip-address'", "dry run requested, skipping execution"])
+    assert result.output.strip() == '\n'.join(
+        [
+            "dry run requested, enable verbose output",
+            "IP address reported by API 'some-ip-address'",
+            "dry run requested, skipping execution",
+        ]
+    )
 
     # Assertions on calls
     mock_collect_existing_dns_records.assert_called_once_with(mock_api(), ["example.com"], 2)
@@ -118,7 +125,9 @@ def test_cli_abort(runner, monkeypatch, data):
 
     assert result.exit_code == 0
     assert not result.exception
-    assert result.output.strip() == '\n'.join(["IP address reported by API 'some-ip-address'", "Would you like to proceed? [yN]: ", "Operation aborted."])
+    assert result.output.strip() == '\n'.join(
+        ["IP address reported by API 'some-ip-address'", "Would you like to proceed? [yN]: ", "Operation aborted."]
+    )
 
     # Assertions on calls
     mock_collect_existing_dns_records.assert_called_once_with(mock_api(), ["example.com"], 1)
@@ -169,7 +178,9 @@ def test_cli(runner, monkeypatch):
 
     assert result.exit_code == 0
     assert not result.exception
-    assert result.output.strip() == '\n'.join(["IP address reported by API 'some-ip-address'", "Would you like to proceed? [yN]:"])
+    assert result.output.strip() == '\n'.join(
+        ["IP address reported by API 'some-ip-address'", "Would you like to proceed? [yN]:"]
+    )
 
     # Assertions on calls
     mock_collect_existing_dns_records.assert_called_once_with(mock_api(), ["example.com"], 1)
@@ -195,9 +206,7 @@ def test_cli(runner, monkeypatch):
             ]
         },
     )
-    mock_execute_operations_plan.assert_called_once_with(
-        mock_api(), 1, "operations-plan"
-    )
+    mock_execute_operations_plan.assert_called_once_with(mock_api(), 1, "operations-plan")
 
 
 class TestHelpers(TestCase):
