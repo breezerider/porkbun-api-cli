@@ -41,7 +41,7 @@ Overview
     :alt: PyPI Wheel
     :target: https://test.pypi.org/project/porkbun-api-cli
 
-.. |supported-versions| image:: https://img.shields.io/badge/python-3.8_|_3.9_|_3.10-informational?style=flat
+.. |supported-versions| image:: https://img.shields.io/badge/python-3.8_|_3.9_|_3.10|_3.11-informational?style=flat
     :alt: Supported Python versions
     :target: https://test.pypi.org/project/porkbun-api-cli
 
