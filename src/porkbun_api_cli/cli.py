@@ -1,27 +1,34 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import sys
+from typing import TextIO
 
 import click
 
 from . import __version__
 from . import api as PorkbunAPI
 from . import utils
+from .utils import DnsRecord
+from .utils import ExistingDnsRecord
+from .utils import Operation
 
 
-def _print_version(ctx, param, value):
+def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
     if not value or ctx.resilient_parsing:
         return
     click.echo(f'Version {__version__}')
     ctx.exit(0)
 
 
-def _log_if_level(level, verbosity, message, file=None, nl=True):
+def _log_if_level(level: int, verbosity: int, message: str, file: TextIO | None = None, nl: bool = True) -> None:
     if verbosity >= level:
         click.echo(message, file=file, nl=nl)
 
 
-def _collect_existing_dns_records(api, domain_names, verbose):
+def _collect_existing_dns_records(
+    api: PorkbunAPI.PorkbunAPI, domain_names: list[str], verbose: int
+) -> dict[str, list[ExistingDnsRecord] | None]:
     result = {}
     for domain_name in domain_names:
         _log_if_level(0, verbose, f"- querying records for '{domain_name}' .. ", nl=False)
@@ -40,7 +47,12 @@ def _collect_existing_dns_records(api, domain_names, verbose):
     return result
 
 
-def _plan_operations(mode, verbose, existing_domains, config_domains):
+def _plan_operations(
+    mode: str,
+    verbose: int,
+    existing_domains: dict[str, list[ExistingDnsRecord] | None],
+    config_domains: dict[str, list[DnsRecord]],
+) -> dict[str, list[Operation] | None]:
     all_domain_names = sorted({*existing_domains.keys(), *config_domains.keys()})
 
     _log_if_level(1, verbose, "\n\tPROCESSING EXISTING RECORDS\n")
@@ -58,7 +70,7 @@ def _plan_operations(mode, verbose, existing_domains, config_domains):
             planned_operations[domain_name] = None
             continue
 
-        operations = []
+        operations: list[Operation] = []
         processed = []
         for record in config_dns_records:
             existing = filter(lambda x: utils.compare_record_by_name_type(domain_name, record, x), existing_dns_records)
@@ -95,9 +107,13 @@ def _plan_operations(mode, verbose, existing_domains, config_domains):
     return planned_operations
 
 
-def _execute_operations_plan(api, verbose, operations_plan):
+def _execute_operations_plan(
+    api: PorkbunAPI.PorkbunAPI, verbose: int, operations_plan: dict[str, list[Operation] | None]
+) -> None:
     _log_if_level(1, verbose, "\n\tEXECUTION\n")
     for domain_name, operations in operations_plan.items():
+        if operations is None:
+            continue
         _log_if_level(1, verbose, f"- altering domain '{domain_name}'")
         for operation in operations:
             op = operation["operation"]
@@ -107,12 +123,16 @@ def _execute_operations_plan(api, verbose, operations_plan):
 
             if op in ["create", "update"]:
                 record = operation["new"]
+                # ty: narrow — new is non-None on create/update branch
+                assert record is not None
                 if len(record["name"]):
                     name = f"{record['name']}.{domain_name}"
                 else:
                     name = domain_name
             elif op == "delete":
                 record = operation["existing"]
+                # ty: narrow — existing is non-None on delete branch
+                assert record is not None
                 name = record["name"]
             _log_if_level(1, verbose, f"\t{op} {record['type']}-record '{name}' ... ", nl=False)
 
@@ -120,7 +140,10 @@ def _execute_operations_plan(api, verbose, operations_plan):
                 if op == "create":
                     api.create_record(domain_name, record)
                 elif op == "update":
-                    api.update_record(domain_name, operation["existing"]["id"], record)
+                    existing = operation["existing"]
+                    # ty: narrow — existing is non-None on update branch (update requires a matched record)
+                    assert existing is not None
+                    api.update_record(domain_name, existing["id"], record)
                 elif op == "delete":
                     _log_if_level(0, verbose, f"{op} operation is not implemented - skipped")
             except RuntimeError as e:
@@ -135,14 +158,12 @@ def _execute_operations_plan(api, verbose, operations_plan):
 @click.option(
     "-m",
     "--mode",
-    type=click.Choice(
-        [
-            "append",
-            "replace",
-            "update",
-            "upgrade",
-        ]
-    ),
+    type=click.Choice([
+        "append",
+        "replace",
+        "update",
+        "upgrade",
+    ]),
     default="append",
 )
 @click.option("-n", "--dry-run", is_flag=True, help="Perform a trial run without any changes made")
@@ -157,7 +178,7 @@ def _execute_operations_plan(api, verbose, operations_plan):
 )
 @click.option("-v", "--verbose", count=True, help="Output verbosity")
 @click.argument("arguments", nargs=-1)
-def main(config_file, mode, dry_run, verbose, arguments):
+def main(config_file: str, mode: str, dry_run: bool, verbose: int, arguments: tuple[str, ...]) -> None:
     """CLI client for managing domains with Porkbun through API calls.
 
     It can create, edit and list DNS records following a configuration
@@ -172,7 +193,7 @@ def main(config_file, mode, dry_run, verbose, arguments):
                 entries that are not listed in the configuration
     * upgrade -- create new entries or update exising but do not remove
                  entries that are not listed in the configuration
-    """  # noqa: E501, B950
+    """  # noqa: E501
 
     # load configuration
     try:

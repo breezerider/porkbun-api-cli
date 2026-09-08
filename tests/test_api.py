@@ -8,7 +8,6 @@ from porkbun_api_cli.api import PorkbunAPI
 
 
 class TestPorkbunAPI(unittest.TestCase):
-
     @patch("porkbun_api_cli.api.requests.post")
     def test_query_api_success_no_datafield(self, mock_post):
         mock_response = Mock()

@@ -1,7 +1,38 @@
+from __future__ import annotations
+
+from typing import Any
+from typing import NotRequired
+from typing import TypedDict
+
 import yaml
 
+# TODO: DTOs need a refactor — TypedDicts are a stopgap; dataclass migration is a follow-up feature.
 
-def compare_record_by_content_ttl_prio(target, other):
+
+class DnsRecord(TypedDict):
+    name: str
+    type: str
+    content: str
+    ttl: NotRequired[str]
+    prio: NotRequired[str]
+
+
+class ExistingDnsRecord(TypedDict):
+    name: str
+    type: str
+    content: str
+    ttl: NotRequired[str]
+    prio: NotRequired[str]
+    id: str
+
+
+class Operation(TypedDict):
+    operation: str
+    new: DnsRecord | None
+    existing: ExistingDnsRecord | None
+
+
+def compare_record_by_content_ttl_prio(target: DnsRecord, other: ExistingDnsRecord) -> bool:
     """Compare a record from current configuration and an existing one returned by the API.
     Only consider record content, TTL and priority.
 
@@ -20,7 +51,7 @@ def compare_record_by_content_ttl_prio(target, other):
     )
 
 
-def compare_record_by_name_type(domain_name, target, other):
+def compare_record_by_name_type(domain_name: str, target: DnsRecord, other: ExistingDnsRecord) -> bool:
     """Compare a record from current configuration and an existing one returned by the API.
     Only consider fqdn and record type.
 
@@ -36,7 +67,7 @@ def compare_record_by_name_type(domain_name, target, other):
     return target_fqdn == other["name"] and target["type"] == other["type"]
 
 
-def operation_allowed_by_mode(operation, mode):
+def operation_allowed_by_mode(operation: str, mode: str) -> bool:
     """Check whether an operation is allowed by current operation mode. Supported operations:
 
     * create
@@ -61,7 +92,7 @@ def operation_allowed_by_mode(operation, mode):
     return False
 
 
-def load_config(config_file_path):
+def load_config(config_file_path: str) -> dict[str, Any]:
     """Load configuration from a YAML file with following format:
 
     :: code_block::yaml

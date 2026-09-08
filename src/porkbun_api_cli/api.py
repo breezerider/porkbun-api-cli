@@ -1,14 +1,22 @@
+from __future__ import annotations
+
 import json
+from collections.abc import Mapping
+from typing import Any
 
 import requests
 
+from .utils import DnsRecord
+from .utils import ExistingDnsRecord
+
 
 class PorkbunAPI:
-
-    def __init__(self, apikey, secretapikey, endpoint):
+    def __init__(self, apikey: str, secretapikey: str, endpoint: str) -> None:
         self._config = {"secretapikey": secretapikey, "apikey": apikey, "endpoint": endpoint}
 
-    def _query_api(self, endpoint, payload=None, datafield=None):
+    def _query_api(
+        self, endpoint: str, payload: Mapping[str, Any] | None = None, datafield: str | None = None
+    ) -> tuple[Any, bool]:
         if payload is None:
             payload = {}
         data = {**self._config, **payload}
@@ -50,8 +58,8 @@ class PorkbunAPI:
 
     def list_dns_records(
         self,
-        domain,
-    ):
+        domain: str,
+    ) -> list[ExistingDnsRecord]:
         data, success = self._query_api(endpoint=f"dns/retrieve/{domain}", datafield="records")
 
         if success:
@@ -59,7 +67,7 @@ class PorkbunAPI:
         else:
             raise RuntimeError("list_dns_records failed: " + data)
 
-    def create_record(self, domain, record):
+    def create_record(self, domain: str, record: DnsRecord) -> str:
         if (
             isinstance(domain, str)
             and len(domain) > 0
@@ -76,7 +84,7 @@ class PorkbunAPI:
         else:
             raise RuntimeError("create_record failed: " + data)
 
-    def update_record(self, domain, record_id, new_record):
+    def update_record(self, domain: str, record_id: str, new_record: DnsRecord) -> None:
         if (
             isinstance(domain, str)
             and len(domain) > 0
@@ -94,7 +102,7 @@ class PorkbunAPI:
         else:
             raise RuntimeError("update_record failed: " + data)
 
-    def get_my_ip(self):
+    def get_my_ip(self) -> str:
         data, success = self._query_api(endpoint="ping", datafield="yourIp")
 
         if success:

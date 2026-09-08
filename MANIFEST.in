@@ -5,7 +5,6 @@ prune ci
 
 include .readthedocs.yml
 include pyproject.toml
-include pytest.ini
 include tox.ini
 
 include AUTHORS.rst
@@ -15,3 +14,11 @@ include LICENSE
 include README.rst
 
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
+
+# Opencode project meta — not part of the sdist; opencode agent land, not user land.
+prune .agents
+prune docs/ristretto
+prune .ristretto
+exclude AGENTS.md
+exclude .ristretto.json
+exclude uv.lock
