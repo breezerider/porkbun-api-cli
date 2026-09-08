@@ -1,0 +1,9 @@
+{
+  "gates": {
+    "lint": "tox -e check",
+    "test": "tox -e py311",
+    "testChanged": [
+      { "match": ["src/**/*.py", "tests/**/*.py"], "cmd": "tox -e py311 -- {files}" }
+    ]
+  }
+}
