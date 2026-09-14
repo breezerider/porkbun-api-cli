@@ -115,18 +115,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Set up Python 3.11
+      - name: Set up Python 3.13
         uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - name: Install dependencies
         run: |
           python -mpip install --progress-bar=off -r ci/requirements.txt
           tox --version
       - name: Run tests and collect coverage
-        run: tox -e py311,report -v
+        run: tox -e py313,report -v
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5.6.0
+        uses: codecov/codecov-action@v6.0.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
