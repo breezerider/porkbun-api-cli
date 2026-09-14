@@ -5,6 +5,8 @@ from unittest.mock import patch
 from requests import RequestException
 
 from porkbun_api_cli.api import PorkbunAPI
+from porkbun_api_cli.utils import DnsRecord
+from porkbun_api_cli.utils import ExistingDnsRecord
 
 
 class TestPorkbunAPI(unittest.TestCase):
@@ -99,10 +101,18 @@ class TestPorkbunAPI(unittest.TestCase):
     # Mocking _query_api method for success response
     @patch("porkbun_api_cli.api.PorkbunAPI._query_api")
     def test_list_dns_records_success(self, mock_query_api):
-        mock_query_api.return_value = ({"record1": "value1", "record2": "value2"}, True)
+        mock_query_api.return_value = (
+            [
+                {"name": "x", "type": "A", "content": "1", "id": "1", "ttl": "600"},
+            ],
+            True,
+        )
         api = PorkbunAPI(apikey="apikey", secretapikey="secretapikey", endpoint="http://porkbun.com/api")
         result = api.list_dns_records("porkbun.com/api")
-        self.assertEqual(result, {"record1": "value1", "record2": "value2"})
+        expected = [
+            ExistingDnsRecord(name="x", type="A", content="1", id="1", ttl=600),
+        ]
+        self.assertEqual(result, expected)
 
     # Mocking _query_api method for failure response
     @patch("porkbun_api_cli.api.PorkbunAPI._query_api")
@@ -119,21 +129,16 @@ class TestPorkbunAPI(unittest.TestCase):
     def test_create_record_success(self, mock_query_api):
         mock_query_api.return_value = ("record_id", True)
         api = PorkbunAPI(apikey="apikey", secretapikey="secretapikey", endpoint="http://porkbun.com/api")
-        result = api.create_record("some.domain", {"name": "test", "type": "A", "content": "127.0.0.1"})
+        result = api.create_record("some.domain", DnsRecord(name="test", type="A", content="127.0.0.1"))
         self.assertEqual(result, "record_id")
-
-    def test_create_record_invalid_payload(self):
-        for name, args in [
-            ('invalid domain', (None, {"name": "test", "type": "A", "content": "127.0.0.1"})),
-            ('invalid record', ("some.domain", {"name": "test", "type": "A", "magick": "42"})),
-            ('empty record', ("some.domain", {})),
-        ]:
-            with self.subTest(name):
-                with self.assertRaises(RuntimeError) as context:
-                    print(*args)
-                    PorkbunAPI.create_record(None, *args)
-
-                self.assertTrue("create_record failed: invalid input values" in str(context.exception))
+        mock_query_api.assert_called_once()
+        _, kwargs = mock_query_api.call_args
+        self.assertEqual(kwargs["endpoint"], "dns/create/some.domain")
+        self.assertEqual(
+            kwargs["payload"],
+            {"name": "test", "type": "A", "content": "127.0.0.1", "ttl": None, "prio": None},
+        )
+        self.assertEqual(kwargs["datafield"], "id")
 
     # Mocking _query_api method for failure response
     @patch("porkbun_api_cli.api.PorkbunAPI._query_api")
@@ -141,7 +146,7 @@ class TestPorkbunAPI(unittest.TestCase):
         mock_query_api.return_value = ("error message", False)
         api = PorkbunAPI(apikey="apikey", secretapikey="secretapikey", endpoint="http://porkbun.com/api")
         with self.assertRaises(RuntimeError) as context:
-            api.create_record("some.domain", {"name": "test", "type": "A", "content": "127.0.0.1"})
+            api.create_record("some.domain", DnsRecord(name="test", type="A", content="127.0.0.1"))
 
         self.assertTrue("create_record failed: error message" in str(context.exception))
 
@@ -150,22 +155,15 @@ class TestPorkbunAPI(unittest.TestCase):
     def test_update_record_success(self, mock_query_api):
         mock_query_api.return_value = (None, True)
         api = PorkbunAPI(apikey="apikey", secretapikey="secretapikey", endpoint="http://porkbun.com/api")
-        result = api.update_record("some.domain", "record_id", {"name": "test", "type": "A", "content": "127.0.0.1"})
+        result = api.update_record("some.domain", "record_id", DnsRecord(name="test", type="A", content="127.0.0.1"))
         self.assertIsNone(result)
-
-    def test_update_record_invalid_payload(self):
-        for name, args in [
-            ('invalid domain', (None, "1", {"name": "test", "type": "A", "content": "127.0.0.1"})),
-            ('invalid id', ("some.domain", None, {"name": "test", "type": "A", "content": "127.0.0.1"})),
-            ('invalid record', ("some.domain", "2", {"name": "test", "type": "A", "magick": "42"})),
-            ('empty record', ("some.domain", "3", {})),
-        ]:
-            with self.subTest(name):
-                with self.assertRaises(RuntimeError) as context:
-                    print(*args)
-                    PorkbunAPI.update_record(None, *args)
-
-                self.assertTrue("update_record failed: invalid input values" in str(context.exception))
+        mock_query_api.assert_called_once()
+        _, kwargs = mock_query_api.call_args
+        self.assertEqual(kwargs["endpoint"], "dns/edit/some.domain/record_id")
+        self.assertEqual(
+            kwargs["payload"],
+            {"name": "test", "type": "A", "content": "127.0.0.1", "ttl": None, "prio": None},
+        )
 
     # Mocking _query_api method for failure response
     @patch("porkbun_api_cli.api.PorkbunAPI._query_api")
@@ -173,7 +171,7 @@ class TestPorkbunAPI(unittest.TestCase):
         mock_query_api.return_value = ("error message", False)
         api = PorkbunAPI(apikey="apikey", secretapikey="secretapikey", endpoint="http://porkbun.com/api")
         with self.assertRaises(RuntimeError) as context:
-            api.update_record("some.domain", "", {"name": "test", "type": "A", "content": "127.0.0.1"})
+            api.update_record("some.domain", "", DnsRecord(name="test", type="A", content="127.0.0.1"))
 
         self.assertTrue("update_record failed: error message" in str(context.exception))
 

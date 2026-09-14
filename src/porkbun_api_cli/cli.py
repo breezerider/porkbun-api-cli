@@ -72,35 +72,53 @@ def _plan_operations(
 
         operations: list[Operation] = []
         processed = []
-        for record in config_dns_records:
-            existing = filter(lambda x: utils.compare_record_by_name_type(domain_name, record, x), existing_dns_records)
+        for target_record in config_dns_records:
+            existing = [
+                x for x in existing_dns_records if utils.compare_record_by_name_type(domain_name, target_record, x)
+            ]
             existing_found = False
             for entry in existing:
                 existing_found = True
                 processed.append(entry)
-                if utils.compare_record_by_content_ttl_prio(record, entry):
+                target_fqdn = f"{target_record.name}.{domain_name}" if len(target_record.name) else domain_name
+                if utils.compare_record_by_content_ttl_prio(target_record, entry):
+                    if target_record.ttl == 0:
+                        _log_if_level(
+                            0,
+                            verbose,
+                            f"ttl=0 in config treated as 'use default'; ttl comparison skipped for {target_fqdn}",
+                            file=sys.stderr,
+                        )
+                    if target_record.prio is None and entry.prio not in (None, 0):
+                        _log_if_level(
+                            0,
+                            verbose,
+                            f"prio omitted in config; server returned prio={entry.prio} for {target_fqdn}",
+                            file=sys.stderr,
+                        )
                     _log_if_level(
                         3,
                         verbose,
-                        f"\t- found matching {record['type']}-record '{record['name']}.{domain_name}'",
+                        f"\t- found matching {target_record.type}-record '{target_fqdn}'",
                     )
                 elif utils.operation_allowed_by_mode("update", mode):
                     _log_if_level(
                         2,
                         verbose,
-                        f"\t- update {record['type']}-record '{record['name']}.{domain_name}'",
+                        f"\t- update {target_record.type}-record '{target_fqdn}'",
                     )
-                    operations.append({"operation": "update", "new": record, "existing": entry})
+                    operations.append(Operation(operation="update", new=target_record, existing=entry))
             if not existing_found and utils.operation_allowed_by_mode("create", mode):
-                _log_if_level(2, verbose, f"\t- create {record['type']}-record '{record['name']}.{domain_name}'")
-                operations.append({"operation": "create", "new": record, "existing": None})
+                target_fqdn = f"{target_record.name}.{domain_name}" if len(target_record.name) else domain_name
+                _log_if_level(2, verbose, f"\t- create {target_record.type}-record '{target_fqdn}'")
+                operations.append(Operation(operation="create", new=target_record, existing=None))
 
         # check if additional exntries should be removed
         if utils.operation_allowed_by_mode("delete", mode):
-            for record in existing_dns_records:
-                if record not in processed:
-                    _log_if_level(2, verbose, f"\t- delete {record['type']}-record '{record['name']}'")
-                    operations.append({"operation": "delete", "new": None, "existing": record})
+            for entry in existing_dns_records:
+                if entry not in processed:
+                    _log_if_level(2, verbose, f"\t- delete {entry.type}-record '{entry.name}'")
+                    operations.append(Operation(operation="delete", new=None, existing=entry))
 
         planned_operations[domain_name] = operations
 
@@ -116,41 +134,38 @@ def _execute_operations_plan(
             continue
         _log_if_level(1, verbose, f"- altering domain '{domain_name}'")
         for operation in operations:
-            op = operation["operation"]
+            op = operation.operation
             if op not in ["create", "update", "delete"]:
                 _log_if_level(0, verbose, f"unknown operation '{op}'")
                 continue
 
-            if op in ["create", "update"]:
-                record = operation["new"]
-                # ty: narrow — new is non-None on create/update branch
-                assert record is not None
-                if len(record["name"]):
-                    name = f"{record['name']}.{domain_name}"
-                else:
-                    name = domain_name
-            elif op == "delete":
-                record = operation["existing"]
+            if op == "delete":
+                existing = operation.existing
                 # ty: narrow — existing is non-None on delete branch
-                assert record is not None
-                name = record["name"]
-            _log_if_level(1, verbose, f"\t{op} {record['type']}-record '{name}' ... ", nl=False)
+                assert existing is not None
+                name = existing.name
+                _log_if_level(1, verbose, f"\t{op} {existing.type}-record '{name}' ... ", nl=False)
+                _log_if_level(0, verbose, f"{op} operation is not implemented - skipped")
+                continue
+
+            new = operation.new
+            # ty: narrow — new is non-None on create/update branch
+            assert new is not None
+            name = f"{new.name}.{domain_name}" if len(new.name) else domain_name
+            _log_if_level(1, verbose, f"\t{op} {new.type}-record '{name}' ... ", nl=False)
 
             try:
                 if op == "create":
-                    api.create_record(domain_name, record)
-                elif op == "update":
-                    existing = operation["existing"]
+                    api.create_record(domain_name, new)
+                else:  # op == "update"
+                    existing = operation.existing
                     # ty: narrow — existing is non-None on update branch (update requires a matched record)
                     assert existing is not None
-                    api.update_record(domain_name, existing["id"], record)
-                elif op == "delete":
-                    _log_if_level(0, verbose, f"{op} operation is not implemented - skipped")
+                    api.update_record(domain_name, existing.id, new)
             except RuntimeError as e:
                 _log_if_level(0, verbose, f"querying Porkbun API for domain '{domain_name}' failed: {str(e)}")
             else:
-                if op != "delete":
-                    _log_if_level(1, verbose, "done")
+                _log_if_level(1, verbose, "done")
 
 
 @click.command()
@@ -202,7 +217,11 @@ def main(config_file: str, mode: str, dry_run: bool, verbose: int, arguments: tu
         click.echo(f"failed to load configuration from {config_file}: " + str(e))
         sys.exit(1)
 
-    api = PorkbunAPI.PorkbunAPI(**config["api"])
+    api = PorkbunAPI.PorkbunAPI(
+        apikey=config.api.apikey,
+        secretapikey=config.api.secretapikey,
+        endpoint=config.api.endpoint,
+    )
 
     if dry_run:
         click.echo("dry run requested, enable verbose output")
@@ -217,10 +236,10 @@ def main(config_file: str, mode: str, dry_run: bool, verbose: int, arguments: tu
         sys.exit(1)
 
     # extract domain domain names
-    domain_names = [entry["name"] for entry in config["domains"]]
+    domain_names = [d.name for d in config.domains]
 
     existing_domains = _collect_existing_dns_records(api, domain_names, verbose)
-    config_domains = {x["name"]: x["records"] for x in config["domains"]}
+    config_domains = {d.name: d.records for d in config.domains}
 
     operations_plan = _plan_operations(mode, verbose, existing_domains, config_domains)
 
