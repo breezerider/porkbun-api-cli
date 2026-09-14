@@ -11,7 +11,7 @@ from . import api as PorkbunAPI
 from . import utils
 from .utils import DnsRecord
 from .utils import ExistingDnsRecord
-from .utils import Operation
+from .utils import PlanEntry
 
 
 def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
@@ -52,7 +52,7 @@ def _plan_operations(
     verbose: int,
     existing_domains: dict[str, list[ExistingDnsRecord] | None],
     config_domains: dict[str, list[DnsRecord]],
-) -> dict[str, list[Operation] | None]:
+) -> dict[str, list[PlanEntry] | None]:
     all_domain_names = sorted({*existing_domains.keys(), *config_domains.keys()})
 
     _log_if_level(1, verbose, "\n\tPROCESSING EXISTING RECORDS\n")
@@ -70,7 +70,7 @@ def _plan_operations(
             planned_operations[domain_name] = None
             continue
 
-        operations: list[Operation] = []
+        operations: list[PlanEntry] = []
         processed = []
         for target_record in config_dns_records:
             existing = [
@@ -101,24 +101,25 @@ def _plan_operations(
                         verbose,
                         f"\t- found matching {target_record.type}-record '{target_fqdn}'",
                     )
+                    operations.append(PlanEntry(operation="match", new=target_record, existing=entry))
                 elif utils.operation_allowed_by_mode("update", mode):
                     _log_if_level(
                         2,
                         verbose,
                         f"\t- update {target_record.type}-record '{target_fqdn}'",
                     )
-                    operations.append(Operation(operation="update", new=target_record, existing=entry))
+                    operations.append(PlanEntry(operation="update", new=target_record, existing=entry))
             if not existing_found and utils.operation_allowed_by_mode("create", mode):
                 target_fqdn = f"{target_record.name}.{domain_name}" if len(target_record.name) else domain_name
                 _log_if_level(2, verbose, f"\t- create {target_record.type}-record '{target_fqdn}'")
-                operations.append(Operation(operation="create", new=target_record, existing=None))
+                operations.append(PlanEntry(operation="create", new=target_record, existing=None))
 
         # check if additional exntries should be removed
         if utils.operation_allowed_by_mode("delete", mode):
             for entry in existing_dns_records:
                 if entry not in processed:
                     _log_if_level(2, verbose, f"\t- delete {entry.type}-record '{entry.name}'")
-                    operations.append(Operation(operation="delete", new=None, existing=entry))
+                    operations.append(PlanEntry(operation="delete", new=None, existing=entry))
 
         planned_operations[domain_name] = operations
 
@@ -126,7 +127,7 @@ def _plan_operations(
 
 
 def _execute_operations_plan(
-    api: PorkbunAPI.PorkbunAPI, verbose: int, operations_plan: dict[str, list[Operation] | None]
+    api: PorkbunAPI.PorkbunAPI, verbose: int, operations_plan: dict[str, list[PlanEntry] | None]
 ) -> None:
     _log_if_level(1, verbose, "\n\tEXECUTION\n")
     for domain_name, operations in operations_plan.items():
@@ -135,6 +136,8 @@ def _execute_operations_plan(
         _log_if_level(1, verbose, f"- altering domain '{domain_name}'")
         for operation in operations:
             op = operation.operation
+            if op == "match":
+                continue
             if op not in ["create", "update", "delete"]:
                 _log_if_level(0, verbose, f"unknown operation '{op}'")
                 continue

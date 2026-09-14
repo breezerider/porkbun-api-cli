@@ -11,5 +11,4 @@ Cross-cutting TODOs and deferred decisions surfaced during prep. Not roadmap fea
 ## Assert-based type narrowing — replace with per-op TypedDicts + Literal discriminators
 
 - **Origin:** ty-typecheck plan (`docs/ristretto/plans/ty-typecheck.md`), Decisions (assert policy) + contract (assert criteria).
-- **Partly resolved by:** `dto-migration` — the asserts (`# ty: narrow` + `assert ... is not None`) still narrow dataclass fields cleanly with `ty==0.0.79`, no further changes needed for runtime correctness.
-- **Carry-forward (scope: `plan-entry-redesign`):** the structural `Operation` → `CreateOp` / `UpdateOp` / `DeleteOp` split with `Literal` discriminators is no longer *needed* for ty to narrow on dataclass attribute access — the `assert` pattern still works — so the discriminator refactor is now a `plan-entry-redesign` nicety rather than a correctness fix.
+- **Resolved by:** `plan-entry-redesign` — `Operation.operation` widened to `Literal["create", "update", "delete", "match"]`; the typed-discriminator split into `CreateOp` / `UpdateOp` / `DeleteOp` was dropped in favor of a single `PlanEntry = Operation` class with `Literal[...]`. Assert narrowing (`# ty: narrow` + `assert ... is not None`) keeps covering the create/update/delete branches since match entries never execute.

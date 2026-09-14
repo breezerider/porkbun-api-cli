@@ -13,6 +13,7 @@ from porkbun_api_cli import cli
 from porkbun_api_cli.utils import DnsRecord
 from porkbun_api_cli.utils import ExistingDnsRecord
 from porkbun_api_cli.utils import Operation
+from porkbun_api_cli.utils import PlanEntry
 
 
 @pytest.fixture
@@ -284,13 +285,16 @@ class TestHelpers(TestCase):
         # Assertions on result
         self.assertEqual(len(result), 4)  # Four domains processed
         self.assertIn("replace.com", result)
-        self.assertEqual(len(result["replace.com"]), 3)
+        self.assertEqual(len(result["replace.com"]), 4)
         self.assertEqual(result["replace.com"][0].operation, "update")
         self.assertEqual(result["replace.com"][0].new.name, "www")
-        self.assertEqual(result["replace.com"][1].operation, "create")
-        self.assertEqual(result["replace.com"][1].new.name, "ftp")
-        self.assertEqual(result["replace.com"][2].operation, "delete")
-        self.assertEqual(result["replace.com"][2].existing.name, "mail.replace.com")
+        self.assertEqual(result["replace.com"][1].operation, "match")
+        self.assertEqual(result["replace.com"][1].new.name, "autoconfig")
+        self.assertEqual(result["replace.com"][1].existing.id, "r2")
+        self.assertEqual(result["replace.com"][2].operation, "create")
+        self.assertEqual(result["replace.com"][2].new.name, "ftp")
+        self.assertEqual(result["replace.com"][3].operation, "delete")
+        self.assertEqual(result["replace.com"][3].existing.name, "mail.replace.com")
         self.assertIn("new.com", result)
         self.assertEqual(len(result["new.com"]), 2)
         self.assertEqual(result["new.com"][0].operation, "update")
@@ -344,9 +348,12 @@ class TestHelpers(TestCase):
         # Assertions on result
         self.assertEqual(len(result), 3)  # Three domains processed
         self.assertIn("append.com", result)
-        self.assertEqual(len(result["append.com"]), 1)
+        self.assertEqual(len(result["append.com"]), 2)
         self.assertEqual(result["append.com"][0].operation, "create")
         self.assertEqual(result["append.com"][0].new.name, "ftp")
+        self.assertEqual(result["append.com"][1].operation, "match")
+        self.assertEqual(result["append.com"][1].new.name, "mail")
+        self.assertEqual(result["append.com"][1].existing.id, "a2")
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
@@ -390,9 +397,12 @@ class TestHelpers(TestCase):
         # Assertions on result
         self.assertEqual(len(result), 3)  # Three domains processed
         self.assertIn("update.com", result)
-        self.assertEqual(len(result["update.com"]), 1)
+        self.assertEqual(len(result["update.com"]), 2)
         self.assertEqual(result["update.com"][0].operation, "update")
         self.assertEqual(result["update.com"][0].new.name, "www")
+        self.assertEqual(result["update.com"][1].operation, "match")
+        self.assertEqual(result["update.com"][1].new.name, "mail")
+        self.assertEqual(result["update.com"][1].existing.id, "u2")
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
@@ -436,11 +446,14 @@ class TestHelpers(TestCase):
         # Assertions on result
         self.assertEqual(len(result), 3)  # Three domains processed
         self.assertIn("upgrade.com", result)
-        self.assertEqual(len(result["upgrade.com"]), 2)
+        self.assertEqual(len(result["upgrade.com"]), 3)
         self.assertEqual(result["upgrade.com"][0].operation, "update")
         self.assertEqual(result["upgrade.com"][0].new.name, "www")
         self.assertEqual(result["upgrade.com"][1].operation, "create")
         self.assertEqual(result["upgrade.com"][1].new.name, "ftp")
+        self.assertEqual(result["upgrade.com"][2].operation, "match")
+        self.assertEqual(result["upgrade.com"][2].new.name, "mail")
+        self.assertEqual(result["upgrade.com"][2].existing.id, "u2")
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
@@ -454,6 +467,36 @@ class TestHelpers(TestCase):
             call(3, 2, "\t- found matching MX-record 'mail.upgrade.com'"),
         ]
 
+        self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
+
+    @patch('porkbun_api_cli.cli._log_if_level')
+    def test_plan_operations_emits_exactly_one_match_entry(self, mock_log_if_level):
+        mode = "replace"
+        verbose = 3
+        existing_domains = {
+            "match.com": [
+                ExistingDnsRecord(name="www.match.com", type="A", id="m1", content="127.0.0.1", ttl=600),
+            ],
+            "fail.com": None,
+        }
+        config_domains = {
+            "match.com": [
+                DnsRecord(name="www", type="A", content="127.0.0.1", ttl=600),
+            ],
+        }
+
+        result = cli._plan_operations(mode, verbose, existing_domains, config_domains)
+
+        self.assertEqual(len(result["match.com"]), 1)
+        self.assertIsInstance(result["match.com"][0], PlanEntry)
+        self.assertEqual(result["match.com"][0].operation, "match")
+        self.assertEqual(result["match.com"][0].new.name, "www")
+        self.assertEqual(result["match.com"][0].existing.id, "m1")
+        expected_calls = [
+            call(1, 3, "\n\tPROCESSING EXISTING RECORDS\n"),
+            call(0, 3, "skipping 'fail.com': querying existing records failed"),
+            call(3, 3, "\t- found matching A-record 'www.match.com'"),
+        ]
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
 
     @patch('porkbun_api_cli.cli._log_if_level')
@@ -475,7 +518,9 @@ class TestHelpers(TestCase):
         result = cli._plan_operations(mode, verbose, existing_domains, config_domains)
 
         self.assertEqual(len(result), 2)
-        self.assertEqual(len(result["ttl.com"]), 0)
+        self.assertEqual(len(result["ttl.com"]), 1)
+        self.assertEqual(result["ttl.com"][0].operation, "match")
+        self.assertEqual(result["ttl.com"][0].new.name, "www")
         expected_calls = [
             call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
@@ -508,7 +553,9 @@ class TestHelpers(TestCase):
         result = cli._plan_operations(mode, verbose, existing_domains, config_domains)
 
         self.assertEqual(len(result), 2)
-        self.assertEqual(len(result["prio.com"]), 0)
+        self.assertEqual(len(result["prio.com"]), 1)
+        self.assertEqual(result["prio.com"][0].operation, "match")
+        self.assertEqual(result["prio.com"][0].new.name, "mail")
         expected_calls = [
             call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
