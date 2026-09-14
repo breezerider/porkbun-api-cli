@@ -59,4 +59,66 @@ Known friction points:
 - Depends: dto-migration
 - Parallel-with: —
 
-status: planned
+## Provides
+
+- `Operation.operation` field type widened from `str` to `Literal["create", "update", "delete", "match"]` (single-line `Operation` dataclass upgrade in `utils.py`; no separate `CreateOp`/`UpdateOp`/`DeleteOp` split — the original memo's discriminator refactor was dropped as unnecessary once `dto-migration`'s `assert` narrowing proved sufficient).
+- `PlanEntry = Operation` alias exported from `utils.py` and imported by `cli.py` and `tests/test_cli.py` — gives the new shape a name in the call sites while keeping `Operation` as the single source of truth.
+- `_plan_operations(...) -> dict[str, list[PlanEntry] | None]` (was `dict[str, list[Operation] | None]`): on each `compare_record_by_content_ttl_prio` true branch, `PlanEntry(operation="match", new=target_record, existing=entry)` is appended in addition to the existing v3 `_log_if_level(3, verbose, "\t- found matching ...")` call (message string byte-identical, only attribute-access swap).
+- `_execute_operations_plan` skips `PlanEntry(operation="match")` entries silently via a leading `if op == "match": continue` guard placed before the `"unknown operation"` branch — no API call, no `"unknown operation"` log (matches are expected and frequent; logging them would drown the execution log).
+- `operation_allowed_by_mode` table unchanged — `match` is never an op checked against mode; emitted unconditionally when a record fully matches (whichever mode is active).
+- `TestHelpers` count assertions in `test_cli.py` (`test_plan_operations_replace_mode`, `test_plan_operations_append_mode`, `test_plan_operations_update_mode`, `test_plan_operations_upgrade_mode`, plus the pre-existing `test_plan_operations_ttl_zero_emits_warning` and `test_plan_operations_prio_omitted_emits_warning` tests) updated to account for the added `match` entries — `len(result["X.com"])` grows by the match count; ordering preserved (matches interleave with mutations in the existing iteration order); match-assertion sections added per domain.
+- New positive test `test_plan_operations_emits_exactly_one_match_entry`: a fully-matching record produces exactly one `PlanEntry(operation="match", ...)` (not zero, not two) in the returned list, and the v3 "found matching" log line still fires.
+- `docs/ristretto/memos.md` "Assert-based narrowing — replace with per-op TypedDicts + Literal discriminators" entry resolved — `Operation` widened to `Literal[...]`; the typed-discriminator split into `CreateOp`/`UpdateOp`/`DeleteOp` was dropped; assert narrowing (`# ty: narrow` + `assert ... is not None`) continues to cover the create/update/delete branches (match entries never execute, no narrowing needed).
+- No `# type: ignore` introduced; `ty==0.0.79` accepts the `Literal` extension cleanly (verified `tox -e check`).
+
+## Evidence
+
+88 passed, coverage 96.50%, `tox -e check` PASS, `tox -e py311` PASS.
+tier: easy (forced)
+would-escalate: spans >3 files (4)
+review: clean (1 round)
+
+### Gate: lint
+- Command: `tox -e check`
+- Exit code: 0
+- Output: ruff check pass, ruff format --check pass, `ty check src/porkbun_api_cli` pass, readme_renderer pass, check-manifest pass.
+
+### Gate: tests
+- Command: `tox -e py313`
+- Exit code: 0
+- Output: 88 passed, coverage 96.50% (above 95% threshold).
+
+### Gate: matrix
+- Command: `tox -e py311`
+- Exit code: 0
+- Output: 88 passed.
+
+### Acceptance criteria evidence
+
+`Literal` extension:
+- `utils.py` `Operation.operation` widened to `Literal["create", "update", "delete", "match"]`; `PlanEntry = Operation` alias exported (verified by greps).
+
+Planner emit:
+- `cli._plan_operations` appends `PlanEntry(operation="match", new=target_record, existing=entry)` on each `compare_record_by_content_ttl_prio` true branch (verified by `tests/test_cli.py::TestHelpers::test_plan_operations_emits_exactly_one_match_entry` and the match-assertion sections in the four `test_plan_operations_*_mode` tests).
+
+Executor skip:
+- `cli._execute_operations_plan` leading `if op == "match": continue` guard (verified by `tox -e check` exit 0 and the existing `test_plan_operations_*_mode` tests — match entries do not trigger the `"unknown operation"` log path).
+
+Mode table:
+- `operation_allowed_by_mode` table unchanged (no `"match"` column added); verified by grep of `utils.py`.
+
+Tests:
+- 4 `test_plan_operations_*_mode` tests updated with match-assertion blocks; `test_plan_operations_emits_exactly_one_match_entry` new test covers the positive single-match case.
+
+Memos:
+- `docs/ristretto/memos.md` "Assert-based narrowing" entry updated to "Resolved by: plan-entry-redesign" with carry-forward rationale recorded.
+
+### Gate summary
+
+- lint ✓ (`tox -e check` exit 0)
+- test ✓ (`tox -e py313` 88 passed, 96.50% cov; `tox -e py311` PASS)
+- type checker ✓ (`ty check src/porkbun_api_cli` PASS — `# ty: narrow` + `assert ... is not None` narrowing pattern continues to resolve on dataclass attribute access; no `# type: ignore` introduced)
+
+### Review verdict
+
+review: clean (1 round)
