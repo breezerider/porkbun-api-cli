@@ -169,7 +169,7 @@ review: notes-only (2 note, 2 lean) — 1 round
 
 ### Pending human
 
-pending human: live POST /api/json/v3/dns/retrieve/{domain} call against real Porkbun account to verify ttl/prio JSON types and notes key presence — see docs/ristretto/manual-checks.md
+check passed 2026-09-15 (live `dns/retrieve/{domain}` against real Porkbun account; dry-run reported current config end-to-end; `int()` coercion verified no-op; no `TypeError` from unknown fields) — see docs/ristretto/manual-checks.md
 
 ## Open findings
 

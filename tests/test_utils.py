@@ -183,13 +183,6 @@ def test_dns_record_from_api_filters_unknown_and_warns(capsys):
     assert "notes" not in {f.name for f in DnsRecord.__dataclass_fields__.values()}
 
 
-@pytest.mark.skip(
-    reason="manual check: from_api coercion correctness against real Porkbun API response shape — see docs/ristretto/manual-checks.md"
-)
-def test_from_api_matches_real_porkbun_response_shape():
-    raise NotImplementedError("waits on a manual check against the live Porkbun /dns/retrieve/{domain} response")
-
-
 @pytest.mark.parametrize(
     ("mode", "operation"),
     [
