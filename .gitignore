@@ -131,11 +131,6 @@ dmypy.json
 # PyPI config
 .pypirc
 
-# Cookiecutter-pylibrary bootstrap leftovers — never tracked, never used.
-# The repo uses ci/requirements.txt only; bootstrap.py + templates/ are dead.
-ci/bootstrap.py
-ci/templates/
-
 # Ristretto runtime state — untracked infrastructure files; not source code,
 # not in the sdist. The brew loop drops these on the floor between sessions.
 .ristretto/

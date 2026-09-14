@@ -64,8 +64,8 @@ porkbun-api-cli = "porkbun_api_cli.cli:main"
 dev = [
     'pytest',
     'pytest-cov',
-    'ruff==0.16.6',
-    'ty==0.0.79',
+    'ruff',
+    'ty',
     'types-PyYAML',
     'types-requests',
     'docutils',
