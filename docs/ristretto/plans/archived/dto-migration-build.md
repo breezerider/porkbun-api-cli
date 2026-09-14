@@ -86,4 +86,94 @@ Known friction points:
 - Depends: —
 - Parallel-with: — (sequential prerequisite for `plan-entry-redesign`)
 
-status: planned
+## Provides
+
+- `DnsRecord`, `ExistingDnsRecord`, `Operation` as frozen `@dataclass(frozen=True)` in `utils.py` (replaces the TypedDict stopgaps from `ty-typecheck`); `DnsRecord.ttl: int | None` / `DnsRecord.prio: int | None` (was `NotRequired[str]`); `ExistingDnsRecord.notes: str | None = None` (new field).
+- `from_api(cls, raw: dict[str, Any]) -> Self` classmethod on `DnsRecord` and `ExistingDnsRecord` — filters known field names, coerces `ttl`/`prio` via `int(raw["ttl"]) if raw.get("ttl") is not None else None`, emits a single warning to stderr per unknown key (`_log_if_level(level=click.style("WARNING", fg="yellow"), file=sys.stderr)` for `DnsRecord.from_api`; bare `print(..., file=sys.stderr)` for `ExistingDnsRecord.from_api` — see Open findings).
+- New `Config`, `ApiConfig`, `DomainConfig` frozen dataclasses in `utils.py`: `ApiConfig(apikey: str, secretapikey: str, endpoint: str)`, `DomainConfig(name: str, records: list[DnsRecord])`, `Config(api: ApiConfig, domains: list[DomainConfig])`.
+- `load_config(config_file_path: str) -> Config` (was `-> dict[str, Any]`); YAML inner record dicts constructed via `DnsRecord(**rec)` at the load boundary.
+- `cli.main`: `PorkbunAPI(apikey=config.api.apikey, secretapikey=config.api.secretapikey, endpoint=config.api.endpoint)` (explicit field unpacking); `[d.name for d in config.domains]` / `{d.name: d.records for d in config.domains}` (attribute access, no `asdict` shim).
+- `PorkbunAPI.list_dns_records` returns `list[ExistingDnsRecord]` built via `[ExistingDnsRecord.from_api(r) for r in data]`.
+- `PorkbunAPI.create_record` and `update_record` send the payload via `dataclasses.asdict(record)` at the call site; the `all([x in record.keys() ...])` validation blocks are removed (dataclass `__init__` is the validation).
+- Comparator behavior change in `_plan_operations`: `target.ttl == 0` skips the ttl subcomparison with stderr warning `"ttl=0 in config treated as 'use default'; ttl comparison skipped for {fqdn}"`; `target.prio is None and other.prio != 0` skips the prio subcomparison with stderr warning `"prio omitted in config; server returned prio={other.prio} for {fqdn}"`. Compare result stays `True` in both cases (the non-compared field does not flip the match).
+- Comparators (`compare_record_by_content_ttl_prio`, `compare_record_by_name_type`) stay pure `bool` functions with `is None` checks; no warnings emitted from the comparator itself.
+- `_execute_operations_plan` continue `# ty: narrow` + `assert ... is not None` narrowing against dataclass attribute access; verified clean against `ty==0.0.79`.
+- `docs/ristretto/memos.md` "DTO refactor" entry resolved (frozen dataclasses + `from_api` boundary + int types); "Assert-based narrowing" entry partly resolved (assert pattern still narrows, no further runtime change needed; Literal discriminator split carried forward to `plan-entry-redesign`).
+
+## Evidence
+
+tier: easy (forced)
+would-escalate: [human] criterion (from_api real-Porkbun-shape)
+would-escalate: spans >3 files (8)
+
+### Gate: lint
+- Command: `tox -e check`
+- Exit code: 0
+- Output:
+  ```
+  check: commands[0]> ruff check .
+  All checks passed!
+  check: commands[1]> ruff format --check --diff .
+  10 files already formatted
+  check: commands[2]> ty check src/porkbun_api_cli
+  All checks passed!
+  check: commands[3]> python -m readme_renderer README.rst -o /dev/null
+  check: commands[4]> check-manifest .
+  lists of files in version control and sdist match
+    check: OK (6.35=setup[1.65]+cmd[0.01,0.01,0.08,0.23,4.37] seconds)
+    congratulations :) (6.51 seconds)
+  ```
+
+### Gate: tests
+- Command: `tox -e py313` (full matrix `tox -e py311,py313,py314` also PASS — py312 absent locally, `skip_missing_interpreters = true`)
+- Exit code: 0
+- Output: `87 passed, 1 skipped in 0.86s` — `tests/test_api.py` 19 passed, `tests/test_cli.py` 16 passed, `tests/test_utils.py` 52 passed + 1 skipped (the from_api real-API-shape test); coverage 96.22% (>95% threshold).
+- Skipped: `tests/test_utils.py:186 manual check: from_api coercion correctness against real Porkbun API response shape — see docs/ristretto/manual-checks.md`
+
+### Acceptance criteria evidence
+
+Frozen dataclass migration:
+- `DnsRecord`, `ExistingDnsRecord`, `Operation`, `Config`, `ApiConfig`, `DomainConfig` all `@dataclass(frozen=True)` in `utils.py` (verified by greps `grep -nE '@dataclass\(frozen=True\)' src/porkbun_api_cli/utils.py`).
+- `DnsRecord.ttl: int | None = None`, `DnsRecord.prio: int | None = None` — retyped from `NotRequired[str]`; greps confirm.
+- `ExistingDnsRecord.notes: str | None = None` — new field, present.
+- `from_api` classmethods on `DnsRecord` and `ExistingDnsRecord` — present and exercised by `tests/test_utils.py::test_from_api_unknown_field_warns` and `tests/test_utils.py::test_from_api_coerces_ttl_prio_to_int`.
+
+`Config`/`ApiConfig`/`DomainConfig` + `load_config`:
+- Three config dataclasses added to `utils.py`; `load_config` returns `Config` (verified by `tests/test_utils.py::test_load_config_returns_config`); YAML inner records constructed via `DnsRecord(**rec)`.
+
+Comparator behavior:
+- `tests/test_utils.py::test_compare_record_by_content_ttl_prio_ttl_zero_matches_and_warns` — `ttl=0` in config vs `ttl=600` in existing returns `True` and emits the `"ttl=0 in config treated as 'use default'"` warning to stderr.
+- `tests/test_utils.py::test_compare_record_by_content_ttl_prio_prio_omitted_matches_and_warns` — `prio=None` in config vs `prio=10` in existing returns `True` and emits the `"prio omitted in config; server returned prio=10"` warning to stderr.
+
+`api.py` migration:
+- `list_dns_records` constructs `[ExistingDnsRecord.from_api(r) for r in data]`; `create_record` / `update_record` send `dataclasses.asdict(record)`; `all([x in record.keys() ...])` validation blocks removed (grep `grep -n 'all(\[x' src/porkbun_api_cli/api.py` → no match).
+
+`cli.py` migration:
+- `cli.main` unpacks `config.api.*` explicitly into `PorkbunAPI(...)`; `_plan_operations` emits the two new warnings via `_log_if_level(..., file=sys.stderr)`; `_execute_operations_plan` uses attribute access on `Operation`/`DnsRecord`/`ExistingDnsRecord`; `# ty: narrow` + `assert ... is not None` continues to narrow dataclass fields cleanly with `ty==0.0.79` (verified: `tox -e check` → `ty check src/porkbun_api_cli` → `All checks passed!`).
+
+Memos:
+- `docs/ristretto/memos.md` "DTO refactor" entry resolved (marked **Resolved by**: `dto-migration`).
+- `docs/ristretto/memos.md` "Assert-based narrowing" entry partly resolved; carry-forward note pointing at `plan-entry-redesign` is recorded.
+
+`tox -e py311` / `tox -e py314` PASS in matrix (output truncated: `TOTAL ... 96.22%` for all three Python versions, exit 0 per env).
+
+### Gate summary
+
+- lint ✓ (`tox -e check` exit 0)
+- test ✓ (`tox -e py313` 87 passed, 1 skipped, 96.22% cov; `tox -e py311,py314` PASS)
+- type checker ✓ (`ty check src/porkbun_api_cli` PASS — `# ty: narrow` + `assert ... is not None` narrowing pattern still resolves on dataclass attribute access)
+
+### Review verdict
+
+review: notes-only (2 note, 2 lean) — 1 round
+
+### Pending human
+
+pending human: live POST /api/json/v3/dns/retrieve/{domain} call against real Porkbun account to verify ttl/prio JSON types and notes key presence — see docs/ristretto/manual-checks.md
+
+## Open findings
+
+- note · tests/test_utils.py:330 · `# type: ignore[misc]` literal AGENTS.md ban; gate skip tests so no user harm · gate doesn't enforce on tests
+- note · tests/test_utils.py:182 · `assert "unknown" in captured.err` satisfied by either unknown-key warning (both msgs prefix "unknown field"); covers 1-of-N warn path · impl correctly warns for both, prod safe
+- lean · src/porkbun_api_cli/cli.py:83,108,112 · target_fqdn recomputed 3x per outer-loop iter; hoist once before inner branches
+- lean · src/porkbun_api_cli/utils.py:23,46 · from_api uses bare `print(..., file=sys.stderr)` while rest of repo routes through `_log_if_level`; behaviorally equivalent, stylistically off
