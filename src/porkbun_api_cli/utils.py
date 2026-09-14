@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass
 from dataclasses import fields
 from typing import Any
+from typing import Literal
 
 import yaml
 
@@ -54,9 +55,12 @@ class ExistingDnsRecord:
 
 @dataclass(frozen=True)
 class Operation:
-    operation: str
+    operation: Literal["create", "update", "delete", "match"]
     new: DnsRecord | None = None
     existing: ExistingDnsRecord | None = None
+
+
+PlanEntry = Operation
 
 
 @dataclass(frozen=True)
