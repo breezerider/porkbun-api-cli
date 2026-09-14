@@ -2,6 +2,12 @@
 Changelog
 =========
 
+0.1.2 (2026-09-14)
+------------------
+
+* Maintenance release, no user facing changes
+* Floor Python version at 3.11
+
 0.1.1 (2024-05-13)
 ------------------
 
