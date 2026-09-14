@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import asdict
 from typing import Any
 
 import requests
@@ -63,21 +64,12 @@ class PorkbunAPI:
         data, success = self._query_api(endpoint=f"dns/retrieve/{domain}", datafield="records")
 
         if success:
-            return data
+            return [ExistingDnsRecord.from_api(record) for record in data]
         else:
             raise RuntimeError("list_dns_records failed: " + data)
 
     def create_record(self, domain: str, record: DnsRecord) -> str:
-        if (
-            isinstance(domain, str)
-            and len(domain) > 0
-            and isinstance(record, dict)
-            and all([x in record.keys() for x in ["name", "type", "content"]])
-        ):
-            data, success = self._query_api(endpoint=f"dns/create/{domain}", payload=record, datafield="id")
-        else:
-            data = "invalid input values"
-            success = False
+        data, success = self._query_api(endpoint=f"dns/create/{domain}", payload=asdict(record), datafield="id")
 
         if success:
             return data
@@ -85,17 +77,7 @@ class PorkbunAPI:
             raise RuntimeError("create_record failed: " + data)
 
     def update_record(self, domain: str, record_id: str, new_record: DnsRecord) -> None:
-        if (
-            isinstance(domain, str)
-            and len(domain) > 0
-            and isinstance(new_record, dict)
-            and all([x in new_record.keys() for x in ["name", "type", "content"]])
-            and record_id is not None
-        ):
-            data, success = self._query_api(endpoint=f"dns/edit/{domain}/{record_id}", payload=new_record)
-        else:
-            data = "invalid input values"
-            success = False
+        data, success = self._query_api(endpoint=f"dns/edit/{domain}/{record_id}", payload=asdict(new_record))
 
         if success:
             return None

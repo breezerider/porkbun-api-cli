@@ -10,6 +10,9 @@ from click.testing import CliRunner
 from porkbun_api_cli import __version__
 from porkbun_api_cli import api
 from porkbun_api_cli import cli
+from porkbun_api_cli.utils import DnsRecord
+from porkbun_api_cli.utils import ExistingDnsRecord
+from porkbun_api_cli.utils import Operation
 
 
 @pytest.fixture
@@ -73,19 +76,19 @@ def test_cli_dry_run(runner, monkeypatch):
         "existing-records",
         {
             'example.com': [
-                {'name': '', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'autoconfig', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'git', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'mail', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'www', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': '', 'type': 'MX', 'content': 'mail.example.com'},
-                {'name': '', 'type': 'TXT', 'content': 'mock entry 1'},
-                {'name': 'test', 'type': 'TXT', 'content': 'mock entry 2'},
-                {'name': '', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'autoconfig', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'git', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'mail', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'www', 'type': 'AAAA', 'content': 'fe80::1'},
+                DnsRecord(name='', type='A', content='192.168.192.168'),
+                DnsRecord(name='autoconfig', type='A', content='192.168.192.168'),
+                DnsRecord(name='git', type='A', content='192.168.192.168'),
+                DnsRecord(name='mail', type='A', content='192.168.192.168'),
+                DnsRecord(name='www', type='A', content='192.168.192.168'),
+                DnsRecord(name='', type='MX', content='mail.example.com'),
+                DnsRecord(name='', type='TXT', content='mock entry 1'),
+                DnsRecord(name='test', type='TXT', content='mock entry 2'),
+                DnsRecord(name='', type='AAAA', content='fe80::1'),
+                DnsRecord(name='autoconfig', type='AAAA', content='fe80::1'),
+                DnsRecord(name='git', type='AAAA', content='fe80::1'),
+                DnsRecord(name='mail', type='AAAA', content='fe80::1'),
+                DnsRecord(name='www', type='AAAA', content='fe80::1'),
             ]
         },
     )
@@ -137,19 +140,19 @@ def test_cli_abort(runner, monkeypatch, data):
         "existing-records",
         {
             'example.com': [
-                {'name': '', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'autoconfig', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'git', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'mail', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'www', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': '', 'type': 'MX', 'content': 'mail.example.com'},
-                {'name': '', 'type': 'TXT', 'content': 'mock entry 1'},
-                {'name': 'test', 'type': 'TXT', 'content': 'mock entry 2'},
-                {'name': '', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'autoconfig', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'git', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'mail', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'www', 'type': 'AAAA', 'content': 'fe80::1'},
+                DnsRecord(name='', type='A', content='192.168.192.168'),
+                DnsRecord(name='autoconfig', type='A', content='192.168.192.168'),
+                DnsRecord(name='git', type='A', content='192.168.192.168'),
+                DnsRecord(name='mail', type='A', content='192.168.192.168'),
+                DnsRecord(name='www', type='A', content='192.168.192.168'),
+                DnsRecord(name='', type='MX', content='mail.example.com'),
+                DnsRecord(name='', type='TXT', content='mock entry 1'),
+                DnsRecord(name='test', type='TXT', content='mock entry 2'),
+                DnsRecord(name='', type='AAAA', content='fe80::1'),
+                DnsRecord(name='autoconfig', type='AAAA', content='fe80::1'),
+                DnsRecord(name='git', type='AAAA', content='fe80::1'),
+                DnsRecord(name='mail', type='AAAA', content='fe80::1'),
+                DnsRecord(name='www', type='AAAA', content='fe80::1'),
             ]
         },
     )
@@ -191,19 +194,19 @@ def test_cli(runner, monkeypatch):
         "existing-records",
         {
             'example.com': [
-                {'name': '', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'autoconfig', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'git', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'mail', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': 'www', 'type': 'A', 'content': '192.168.192.168'},
-                {'name': '', 'type': 'MX', 'content': 'mail.example.com'},
-                {'name': '', 'type': 'TXT', 'content': 'mock entry 1'},
-                {'name': 'test', 'type': 'TXT', 'content': 'mock entry 2'},
-                {'name': '', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'autoconfig', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'git', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'mail', 'type': 'AAAA', 'content': 'fe80::1'},
-                {'name': 'www', 'type': 'AAAA', 'content': 'fe80::1'},
+                DnsRecord(name='', type='A', content='192.168.192.168'),
+                DnsRecord(name='autoconfig', type='A', content='192.168.192.168'),
+                DnsRecord(name='git', type='A', content='192.168.192.168'),
+                DnsRecord(name='mail', type='A', content='192.168.192.168'),
+                DnsRecord(name='www', type='A', content='192.168.192.168'),
+                DnsRecord(name='', type='MX', content='mail.example.com'),
+                DnsRecord(name='', type='TXT', content='mock entry 1'),
+                DnsRecord(name='test', type='TXT', content='mock entry 2'),
+                DnsRecord(name='', type='AAAA', content='fe80::1'),
+                DnsRecord(name='autoconfig', type='AAAA', content='fe80::1'),
+                DnsRecord(name='git', type='AAAA', content='fe80::1'),
+                DnsRecord(name='mail', type='AAAA', content='fe80::1'),
+                DnsRecord(name='www', type='AAAA', content='fe80::1'),
             ]
         },
     )
@@ -218,7 +221,7 @@ class TestHelpers(TestCase):
         def list_dns_records_side_effect(domain_name):
             if domain_name == "fail.com":
                 raise RuntimeError("API Error")
-            return {"record1": "value1", "record2": "value2"}
+            return [ExistingDnsRecord(name="record1", type="A", content="", id="")]
 
         mock_api.list_dns_records.side_effect = list_dns_records_side_effect
 
@@ -227,7 +230,10 @@ class TestHelpers(TestCase):
         result = cli._collect_existing_dns_records(mock_api, domain_names, verbose)
 
         # Assertions on result
-        self.assertEqual(result, {"pass.com": {"record1": "value1", "record2": "value2"}, "fail.com": None})
+        self.assertEqual(
+            result,
+            {"pass.com": [ExistingDnsRecord(name="record1", type="A", content="", id="")], "fail.com": None},
+        )
 
         # Assertions on log calls
         expected_calls = [
@@ -246,29 +252,29 @@ class TestHelpers(TestCase):
         verbose = 2
         existing_domains = {
             "replace.com": [
-                {"name": "www.replace.com", "type": "A", "content": "127.0.0.1", "ttl": 600},
-                {"name": "autoconfig.replace.com", "type": "A", "content": "127.0.0.1", "ttl": 3600},
-                {"name": "mail.replace.com", "type": "MX", "content": "mail.replace.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.replace.com", type="A", id="r1", content="127.0.0.1", ttl=600),
+                ExistingDnsRecord(name="autoconfig.replace.com", type="A", id="r2", content="127.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.replace.com", type="MX", id="r3", content="mail.replace.com", ttl=3600),
             ],
             "new.com": [
-                {"name": "www.new.com", "type": "A", "content": "192.168.192.168", "ttl": 3600},
-                {"name": "mail.new.com", "type": "MX", "content": "mail.new.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.new.com", type="A", id="n1", content="192.168.192.168", ttl=3600),
+                ExistingDnsRecord(name="mail.new.com", type="MX", id="n2", content="mail.new.com", ttl=3600),
             ],
             "another.com": [
-                {"name": "www.another.com", "type": "A", "content": "10.0.0.1", "ttl": 3600},
-                {"name": "mail.another.com", "type": "MX", "content": "mail.another.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.another.com", type="A", id="a1", content="10.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.another.com", type="MX", id="a2", content="mail.another.com", ttl=3600),
             ],
             "fail.com": None,
         }
         config_domains = {
             "replace.com": [
-                {"name": "www", "type": "A", "content": "127.0.0.1", "ttl": 3600},
-                {"name": "autoconfig", "type": "A", "content": "127.0.0.1", "ttl": 3600},
-                {"name": "ftp", "type": "A", "content": "127.0.0.1", "ttl": 3600},
+                DnsRecord(name="www", type="A", content="127.0.0.1", ttl=3600),
+                DnsRecord(name="autoconfig", type="A", content="127.0.0.1", ttl=3600),
+                DnsRecord(name="ftp", type="A", content="127.0.0.1", ttl=3600),
             ],
             "new.com": [
-                {"name": "www", "type": "A", "content": "169.254.169.254", "ttl": 3600},
-                {"name": "mail", "type": "MX", "content": "new-mail.new.com", "ttl": 3600},
+                DnsRecord(name="www", type="A", content="169.254.169.254", ttl=3600),
+                DnsRecord(name="mail", type="MX", content="new-mail.new.com", ttl=3600),
             ],
         }
 
@@ -279,18 +285,18 @@ class TestHelpers(TestCase):
         self.assertEqual(len(result), 4)  # Four domains processed
         self.assertIn("replace.com", result)
         self.assertEqual(len(result["replace.com"]), 3)
-        self.assertEqual(result["replace.com"][0]["operation"], "update")
-        self.assertEqual(result["replace.com"][0]["new"]["name"], "www")
-        self.assertEqual(result["replace.com"][1]["operation"], "create")
-        self.assertEqual(result["replace.com"][1]["new"]["name"], "ftp")
-        self.assertEqual(result["replace.com"][2]["operation"], "delete")
-        self.assertEqual(result["replace.com"][2]["existing"]["name"], "mail.replace.com")
+        self.assertEqual(result["replace.com"][0].operation, "update")
+        self.assertEqual(result["replace.com"][0].new.name, "www")
+        self.assertEqual(result["replace.com"][1].operation, "create")
+        self.assertEqual(result["replace.com"][1].new.name, "ftp")
+        self.assertEqual(result["replace.com"][2].operation, "delete")
+        self.assertEqual(result["replace.com"][2].existing.name, "mail.replace.com")
         self.assertIn("new.com", result)
         self.assertEqual(len(result["new.com"]), 2)
-        self.assertEqual(result["new.com"][0]["operation"], "update")
-        self.assertEqual(result["new.com"][0]["new"]["name"], "www")
-        self.assertEqual(result["new.com"][1]["operation"], "update")
-        self.assertEqual(result["new.com"][1]["new"]["name"], "mail")
+        self.assertEqual(result["new.com"][0].operation, "update")
+        self.assertEqual(result["new.com"][0].new.name, "www")
+        self.assertEqual(result["new.com"][1].operation, "update")
+        self.assertEqual(result["new.com"][1].new.name, "mail")
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
@@ -315,20 +321,20 @@ class TestHelpers(TestCase):
         verbose = 2
         existing_domains = {
             "append.com": [
-                {"name": "www.append.com", "type": "A", "content": "127.0.0.1", "ttl": 3600},
-                {"name": "mail.append.com", "type": "MX", "content": "mail.append.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.append.com", type="A", id="a1", content="127.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.append.com", type="MX", id="a2", content="mail.append.com", ttl=3600),
             ],
             "another.com": [
-                {"name": "www.another.com", "type": "A", "content": "10.0.0.1", "ttl": 3600},
-                {"name": "mail.another.com", "type": "MX", "content": "mail.another.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.another.com", type="A", id="a3", content="10.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.another.com", type="MX", id="a4", content="mail.another.com", ttl=3600),
             ],
             "fail.com": None,
         }
         config_domains = {
             "append.com": [
-                {"name": "www", "type": "A", "content": "127.0.0.1", "ttl": 600},
-                {"name": "ftp", "type": "A", "content": "127.0.0.1", "ttl": 3600},
-                {"name": "mail", "type": "MX", "content": "mail.append.com", "ttl": 3600},
+                DnsRecord(name="www", type="A", content="127.0.0.1", ttl=600),
+                DnsRecord(name="ftp", type="A", content="127.0.0.1", ttl=3600),
+                DnsRecord(name="mail", type="MX", content="mail.append.com", ttl=3600),
             ]
         }
 
@@ -339,8 +345,8 @@ class TestHelpers(TestCase):
         self.assertEqual(len(result), 3)  # Three domains processed
         self.assertIn("append.com", result)
         self.assertEqual(len(result["append.com"]), 1)
-        self.assertEqual(result["append.com"][0]["operation"], "create")
-        self.assertEqual(result["append.com"][0]["new"]["name"], "ftp")
+        self.assertEqual(result["append.com"][0].operation, "create")
+        self.assertEqual(result["append.com"][0].new.name, "ftp")
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
@@ -361,20 +367,20 @@ class TestHelpers(TestCase):
         verbose = 2
         existing_domains = {
             "update.com": [
-                {"name": "www.update.com", "type": "A", "content": "127.0.0.1", "ttl": 3600},
-                {"name": "mail.update.com", "type": "MX", "content": "mail.update.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.update.com", type="A", id="u1", content="127.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.update.com", type="MX", id="u2", content="mail.update.com", ttl=3600),
             ],
             "another.com": [
-                {"name": "www.another.com", "type": "A", "content": "10.0.0.1", "ttl": 3600},
-                {"name": "mail.another.com", "type": "MX", "content": "mail.another.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.another.com", type="A", id="u3", content="10.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.another.com", type="MX", id="u4", content="mail.another.com", ttl=3600),
             ],
             "fail.com": None,
         }
         config_domains = {
             "update.com": [
-                {"name": "www", "type": "A", "content": "169.254.169.254", "ttl": 3600},
-                {"name": "ftp", "type": "A", "content": "192.168.192.168", "ttl": 3600},
-                {"name": "mail", "type": "MX", "content": "mail.update.com", "ttl": 3600},
+                DnsRecord(name="www", type="A", content="169.254.169.254", ttl=3600),
+                DnsRecord(name="ftp", type="A", content="192.168.192.168", ttl=3600),
+                DnsRecord(name="mail", type="MX", content="mail.update.com", ttl=3600),
             ]
         }
 
@@ -385,8 +391,8 @@ class TestHelpers(TestCase):
         self.assertEqual(len(result), 3)  # Three domains processed
         self.assertIn("update.com", result)
         self.assertEqual(len(result["update.com"]), 1)
-        self.assertEqual(result["update.com"][0]["operation"], "update")
-        self.assertEqual(result["update.com"][0]["new"]["name"], "www")
+        self.assertEqual(result["update.com"][0].operation, "update")
+        self.assertEqual(result["update.com"][0].new.name, "www")
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
@@ -407,20 +413,20 @@ class TestHelpers(TestCase):
         verbose = 2
         existing_domains = {
             "upgrade.com": [
-                {"name": "www.upgrade.com", "type": "A", "content": "127.0.0.1", "ttl": 3600},
-                {"name": "mail.upgrade.com", "type": "MX", "content": "mail.upgrade.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.upgrade.com", type="A", id="u1", content="127.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.upgrade.com", type="MX", id="u2", content="mail.upgrade.com", ttl=3600),
             ],
             "another.com": [
-                {"name": "www.another.com", "type": "A", "content": "10.0.0.1", "ttl": 3600},
-                {"name": "mail.another.com", "type": "MX", "content": "mail.another.com", "ttl": 3600},
+                ExistingDnsRecord(name="www.another.com", type="A", id="u3", content="10.0.0.1", ttl=3600),
+                ExistingDnsRecord(name="mail.another.com", type="MX", id="u4", content="mail.another.com", ttl=3600),
             ],
             "fail.com": None,
         }
         config_domains = {
             "upgrade.com": [
-                {"name": "www", "type": "A", "content": "169.254.169.254", "ttl": 3600},
-                {"name": "ftp", "type": "A", "content": "192.168.192.168", "ttl": 3600},
-                {"name": "mail", "type": "MX", "content": "mail.upgrade.com", "ttl": 3600},
+                DnsRecord(name="www", type="A", content="169.254.169.254", ttl=3600),
+                DnsRecord(name="ftp", type="A", content="192.168.192.168", ttl=3600),
+                DnsRecord(name="mail", type="MX", content="mail.upgrade.com", ttl=3600),
             ]
         }
 
@@ -431,10 +437,10 @@ class TestHelpers(TestCase):
         self.assertEqual(len(result), 3)  # Three domains processed
         self.assertIn("upgrade.com", result)
         self.assertEqual(len(result["upgrade.com"]), 2)
-        self.assertEqual(result["upgrade.com"][0]["operation"], "update")
-        self.assertEqual(result["upgrade.com"][0]["new"]["name"], "www")
-        self.assertEqual(result["upgrade.com"][1]["operation"], "create")
-        self.assertEqual(result["upgrade.com"][1]["new"]["name"], "ftp")
+        self.assertEqual(result["upgrade.com"][0].operation, "update")
+        self.assertEqual(result["upgrade.com"][0].new.name, "www")
+        self.assertEqual(result["upgrade.com"][1].operation, "create")
+        self.assertEqual(result["upgrade.com"][1].new.name, "ftp")
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
@@ -451,32 +457,104 @@ class TestHelpers(TestCase):
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
 
     @patch('porkbun_api_cli.cli._log_if_level')
+    def test_plan_operations_ttl_zero_emits_warning(self, mock_log_if_level):
+        mode = "append"
+        verbose = 2
+        existing_domains = {
+            "ttl.com": [
+                ExistingDnsRecord(name="www.ttl.com", type="A", id="1", content="127.0.0.1", ttl=600),
+            ],
+            "fail.com": None,
+        }
+        config_domains = {
+            "ttl.com": [
+                DnsRecord(name="www", type="A", content="127.0.0.1", ttl=0),
+            ],
+        }
+
+        result = cli._plan_operations(mode, verbose, existing_domains, config_domains)
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result["ttl.com"]), 0)
+        expected_calls = [
+            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
+            call(0, 2, "skipping 'fail.com': querying existing records failed"),
+            call(
+                0,
+                2,
+                "ttl=0 in config treated as 'use default'; ttl comparison skipped for www.ttl.com",
+                file=sys.stderr,
+            ),
+            call(3, 2, "\t- found matching A-record 'www.ttl.com'"),
+        ]
+        self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
+
+    @patch('porkbun_api_cli.cli._log_if_level')
+    def test_plan_operations_prio_omitted_emits_warning(self, mock_log_if_level):
+        mode = "append"
+        verbose = 2
+        existing_domains = {
+            "prio.com": [
+                ExistingDnsRecord(name="mail.prio.com", type="MX", id="1", content="mail.prio.com", ttl=600, prio=10),
+            ],
+            "fail.com": None,
+        }
+        config_domains = {
+            "prio.com": [
+                DnsRecord(name="mail", type="MX", content="mail.prio.com", ttl=600),
+            ],
+        }
+
+        result = cli._plan_operations(mode, verbose, existing_domains, config_domains)
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result["prio.com"]), 0)
+        expected_calls = [
+            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
+            call(0, 2, "skipping 'fail.com': querying existing records failed"),
+            call(
+                0,
+                2,
+                "prio omitted in config; server returned prio=10 for mail.prio.com",
+                file=sys.stderr,
+            ),
+            call(3, 2, "\t- found matching MX-record 'mail.prio.com'"),
+        ]
+        self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
+
+    @patch('porkbun_api_cli.cli._log_if_level')
     def test_execute_operations_plan(self, mock_log_if_level):
         # Mocking API and input arguments
         mock_api = Mock()
         verbose = 2
         operations_plan = {
             "pass.com": [
-                {"operation": "create", "new": {"name": "", "type": "A"}},
-                {"operation": "create", "new": {"name": "www", "type": "A"}},
-                {
-                    "operation": "update",
-                    "existing": {"id": "123", "name": "www", "type": "A"},
-                    "new": {"name": "www", "type": "A"},
-                },
-                {"operation": "delete", "existing": {"id": "456", "name": "mail.pass.com", "type": "MX"}},
+                Operation(operation="create", new=DnsRecord(name="", type="A", content="")),
+                Operation(operation="create", new=DnsRecord(name="www", type="A", content="")),
+                Operation(
+                    operation="update",
+                    existing=ExistingDnsRecord(name="www.pass.com", type="A", id="123", content=""),
+                    new=DnsRecord(name="www", type="A", content=""),
+                ),
+                Operation(
+                    operation="delete",
+                    existing=ExistingDnsRecord(name="mail.pass.com", type="MX", id="456", content=""),
+                ),
             ],
             "fail.com": [
-                {"operation": "create", "new": {"name": "www", "type": "A"}},
-                {
-                    "operation": "update",
-                    "existing": {"id": "321", "name": "www", "type": "A"},
-                    "new": {"name": "www", "type": "A"},
-                },
-                {"operation": "delete", "existing": {"id": "654", "name": "mail.fail.com", "type": "MX"}},
+                Operation(operation="create", new=DnsRecord(name="www", type="A", content="")),
+                Operation(
+                    operation="update",
+                    existing=ExistingDnsRecord(name="www.fail.com", type="A", id="321", content=""),
+                    new=DnsRecord(name="www", type="A", content=""),
+                ),
+                Operation(
+                    operation="delete",
+                    existing=ExistingDnsRecord(name="mail.fail.com", type="MX", id="654", content=""),
+                ),
             ],
             "invalid.com": [
-                {"operation": "invalid"},
+                Operation(operation="invalid"),
             ],
         }
 
