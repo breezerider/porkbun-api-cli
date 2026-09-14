@@ -126,7 +126,7 @@ omit = ["*migrations*"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-extend-exclude = ["docs/ristretto"]
+extend-exclude = ["docs/ristretto", ".agents"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
