@@ -33,7 +33,7 @@ Overview
     :alt: PyPI Package license
     :target: https://test.pypi.org/project/porkbun-api-cli
 
-.. |version| image:: https://img.shields.io/badge/test.pypi-v0.1.1-informational?style=flat
+.. |version| image:: https://img.shields.io/badge/test.pypi-v0.1.2-informational?style=flat
     :alt: PyPI Package latest release
     :target: https://test.pypi.org/project/porkbun-api-cli
 
@@ -41,13 +41,13 @@ Overview
     :alt: PyPI Wheel
     :target: https://test.pypi.org/project/porkbun-api-cli
 
-.. |supported-versions| image:: https://img.shields.io/badge/python-3.8_|_3.9_|_3.10|_3.11-informational?style=flat
+.. |supported-versions| image:: https://img.shields.io/badge/python-3.11_|_3.12_|_3.13|_3.14-informational?style=flat
     :alt: Supported Python versions
     :target: https://test.pypi.org/project/porkbun-api-cli
 
-.. |commits-since| image:: https://img.shields.io/github/commits-since/breezerider/porkbun-api-cli/v0.1.1.svg
+.. |commits-since| image:: https://img.shields.io/github/commits-since/breezerider/porkbun-api-cli/v0.1.2.svg
     :alt: Commits since latest release
-    :target: https://github.com/breezerider/porkbun-api-cli/compare/v0.1.1...main
+    :target: https://github.com/breezerider/porkbun-api-cli/compare/v0.1.2...main
 
 .. end-badges
 
