@@ -58,9 +58,33 @@ its operations to only a subset choosen by the user by supporting
 several operation modes:
 
 * append -- only new entries are created preserving existing entries unchanged
-* replace -- replace all existing entries with user configuration
+* replace -- not implemented, use 'upgrade'
 * update -- only update existing entries without creating or removing entries that are not listed in the configuration
 * upgrade -- create new entries or update exising but do not remove entries that are not listed in the configuration
+
+Command-line options
+--------------------
+
+::
+
+    porkbun-api-cli [OPTIONS] CONFIG_FILE
+
+Options:
+
+* ``-m, --mode [append|replace|update|upgrade]`` — Operation mode (default: append). ``replace`` is not implemented, use ``upgrade``.
+* ``-n, --dry-run`` — Perform a trial run without any changes; exits non-zero (code 3) if any changes would be needed.
+* ``-y, --yes`` — Skip confirmation prompt.
+* ``-v, --verbose`` — Increase output verbosity (``-vv`` for match rows).
+* ``-V, --version`` — Print tool version and exit.
+
+Exit codes
+----------
+
+* ``0`` — success (with or without changes); dry-run in sync.
+* ``1`` — pre-execution failure (API auth, config load).
+* ``2`` — usage error (invalid mode, conflicting flags).
+* ``3`` — dry-run with planned changes.
+* ``4`` — at least one operation failed during execution.
 
 It depends on other common packages:
 

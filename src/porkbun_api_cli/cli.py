@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import sys
 from typing import TextIO
 
@@ -24,6 +25,26 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
 def _log_if_level(level: int, verbosity: int, message: str, file: TextIO | None = None, nl: bool = True) -> None:
     if verbosity >= level:
         click.echo(message, file=file, nl=nl)
+
+
+def _use_color() -> bool:
+    return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+
+def _colorize(text: str, color: str) -> str:
+    if _use_color():
+        return click.style(text, fg=color)
+    return text
+
+
+_SYMBOL_COLORS: dict[str, str] = {
+    "NEW": "green",
+    "UPD": "blue",
+    "DEL": "red",
+    "OK ": "green",
+    "ERR": "bright_red",
+    "SKP": "yellow",
+}
 
 
 def _collect_existing_dns_records(
@@ -114,13 +135,6 @@ def _plan_operations(
                 _log_if_level(2, verbose, f"\t- create {target_record.type}-record '{target_fqdn}'")
                 operations.append(PlanEntry(operation="create", new=target_record, existing=None))
 
-        # check if additional exntries should be removed
-        if utils.operation_allowed_by_mode("delete", mode):
-            for entry in existing_dns_records:
-                if entry not in processed:
-                    _log_if_level(2, verbose, f"\t- delete {entry.type}-record '{entry.name}'")
-                    operations.append(PlanEntry(operation="delete", new=None, existing=entry))
-
         planned_operations[domain_name] = operations
 
     return planned_operations
@@ -128,8 +142,10 @@ def _plan_operations(
 
 def _execute_operations_plan(
     api: PorkbunAPI.PorkbunAPI, verbose: int, operations_plan: dict[str, list[PlanEntry] | None]
-) -> None:
+) -> dict[str, int]:
+    """Execute the operations plan. Returns per-domain failure counts."""
     _log_if_level(1, verbose, "\n\tEXECUTION\n")
+    failed_by_domain: dict[str, int] = {}
     for domain_name, operations in operations_plan.items():
         if operations is None:
             continue
@@ -138,17 +154,8 @@ def _execute_operations_plan(
             op = operation.operation
             if op == "match":
                 continue
-            if op not in ["create", "update", "delete"]:
+            if op not in ["create", "update"]:
                 _log_if_level(0, verbose, f"unknown operation '{op}'")
-                continue
-
-            if op == "delete":
-                existing = operation.existing
-                # ty: narrow — existing is non-None on delete branch
-                assert existing is not None
-                name = existing.name
-                _log_if_level(1, verbose, f"\t{op} {existing.type}-record '{name}' ... ", nl=False)
-                _log_if_level(0, verbose, f"{op} operation is not implemented - skipped")
                 continue
 
             new = operation.new
@@ -166,9 +173,71 @@ def _execute_operations_plan(
                     assert existing is not None
                     api.update_record(domain_name, existing.id, new)
             except RuntimeError as e:
-                _log_if_level(0, verbose, f"querying Porkbun API for domain '{domain_name}' failed: {str(e)}")
+                click.echo(f"querying Porkbun API for domain '{domain_name}' failed: {e}", file=sys.stderr)
+                failed_by_domain[domain_name] = failed_by_domain.get(domain_name, 0) + 1
             else:
                 _log_if_level(1, verbose, "done")
+
+    return failed_by_domain
+
+
+def _render_plan(
+    mode: str,
+    verbose: int,
+    operations_plan: dict[str, list[PlanEntry] | None],
+) -> None:
+    for domain, operations in operations_plan.items():
+        if operations is None:
+            continue
+        click.echo(f"Plan for {domain} ({mode} mode):")
+        for entry in operations:
+            op = entry.operation
+            if op == "match":
+                if verbose < 2:
+                    continue
+                symbol = "OK "
+            elif op == "create":
+                symbol = "NEW"
+            elif op == "update":
+                symbol = "UPD"
+            else:
+                continue
+            if op == "match":
+                rec = entry.new
+                assert rec is not None
+            else:
+                rec = entry.new
+                assert rec is not None
+            fqdn = f"{rec.name}.{domain}" if len(rec.name) else domain
+            content = f"{rec.type} {fqdn} {rec.content}"
+            click.echo(f"  {_colorize(symbol, _SYMBOL_COLORS[symbol])}  {content}")
+
+
+def _render_summary(
+    domain: str,
+    operations: list[PlanEntry] | None,
+    verbose: int,
+    failed_count: int = 0,
+) -> None:
+    if operations is None:
+        return
+    if operations == []:
+        click.echo(f"Summary for {domain}: no records found")
+        return
+    created = sum(1 for e in operations if e.operation == "create")
+    updated = sum(1 for e in operations if e.operation == "update")
+    matched = sum(1 for e in operations if e.operation == "match")
+    failed = failed_count
+    parts = []
+    if verbose >= 1 or created:
+        parts.append(f"{_colorize(str(created), _SYMBOL_COLORS['NEW'])} created")
+    if verbose >= 1 or updated:
+        parts.append(f"{_colorize(str(updated), _SYMBOL_COLORS['UPD'])} updated")
+    if verbose >= 1 or matched:
+        parts.append(f"{_colorize(str(matched), _SYMBOL_COLORS['OK '])} matched")
+    if verbose >= 1 or failed:
+        parts.append(f"{_colorize(str(failed), _SYMBOL_COLORS['ERR'])} failed")
+    click.echo(f"Summary for {domain}: {', '.join(parts)}")
 
 
 @click.command()
@@ -183,8 +252,20 @@ def _execute_operations_plan(
         "upgrade",
     ]),
     default="append",
+    help=("Operation mode: append (default), update, upgrade. 'replace' is not implemented, use 'upgrade'."),
 )
-@click.option("-n", "--dry-run", is_flag=True, help="Perform a trial run without any changes made")
+@click.option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    help="Perform a trial run; exits non-zero (code 3) if any changes would be needed",
+)
+@click.option(
+    "-y",
+    "--yes",
+    is_flag=True,
+    help="Skip confirmation prompt",
+)
 @click.option(
     "-V",
     "--version",
@@ -195,8 +276,7 @@ def _execute_operations_plan(
     is_eager=True,
 )
 @click.option("-v", "--verbose", count=True, help="Output verbosity")
-@click.argument("arguments", nargs=-1)
-def main(config_file: str, mode: str, dry_run: bool, verbose: int, arguments: tuple[str, ...]) -> None:
+def main(config_file: str, mode: str, dry_run: bool, yes: bool, verbose: int) -> None:
     """CLI client for managing domains with Porkbun through API calls.
 
     It can create, edit and list DNS records following a configuration
@@ -206,18 +286,24 @@ def main(config_file: str, mode: str, dry_run: bool, verbose: int, arguments: tu
 
     * append -- only new entries are created preserving existing entries
                 unchanged
-    * replace -- replace all existing entries with user configuration
+    * replace -- not implemented, use 'upgrade'
     * update -- only update existing entries without creating or removing
                 entries that are not listed in the configuration
     * upgrade -- create new entries or update exising but do not remove
                  entries that are not listed in the configuration
     """  # noqa: E501
 
+    if mode == "replace":
+        raise click.UsageError("replace mode is not implemented, use 'upgrade'")
+
+    if yes and dry_run:
+        raise click.UsageError("--yes and --dry-run are mutually exclusive")
+
     # load configuration
     try:
         config = utils.load_config(config_file)
     except Exception as e:
-        click.echo(f"failed to load configuration from {config_file}: " + str(e))
+        click.echo(f"failed to load configuration from {config_file}: {e}", file=sys.stderr)
         sys.exit(1)
 
     api = PorkbunAPI.PorkbunAPI(
@@ -235,7 +321,7 @@ def main(config_file: str, mode: str, dry_run: bool, verbose: int, arguments: tu
         ip = api.get_my_ip()
         _log_if_level(1, verbose, f"IP address reported by API '{ip}'")
     except RuntimeError as e:
-        _log_if_level(0, verbose, f"querying Porkbun API failed: {str(e)}")
+        click.echo(f"querying Porkbun API failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     # extract domain domain names
@@ -246,18 +332,34 @@ def main(config_file: str, mode: str, dry_run: bool, verbose: int, arguments: tu
 
     operations_plan = _plan_operations(mode, verbose, existing_domains, config_domains)
 
+    _render_plan(mode, verbose, operations_plan)
+
     if dry_run:
         click.echo("dry run requested, skipping execution")
-        sys.exit(0)
-    else:
+        has_changes = any(
+            op is not None and any(e.operation in {"create", "update"} for e in op) for op in operations_plan.values()
+        )
+        sys.exit(3 if has_changes else 0)
+
+    if not yes:
         click.echo("Would you like to proceed? [yN]: ", nl=False)
         confirm = click.getchar()
         click.echo()
-        if confirm.lower() != 'y':
-            _log_if_level(0, verbose, "Operation aborted.", file=sys.stderr)
+        if confirm.lower() != "y":
+            click.echo("Operation aborted.", file=sys.stderr)
             sys.exit(0)
 
-    _execute_operations_plan(api, verbose, operations_plan)
+    failed_by_domain = _execute_operations_plan(api, verbose, operations_plan)
+    failed_any = bool(failed_by_domain)
+
+    for domain, operations in operations_plan.items():
+        if operations is None:
+            continue
+        # ty: narrow — non-None operations here (executor skips None entries)
+        domain_failed = failed_by_domain.get(domain, 0)
+        _render_summary(domain, operations, verbose, domain_failed)
+
+    sys.exit(4 if failed_any else 0)
 
 
 if __name__ == "__main__":
