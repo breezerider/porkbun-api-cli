@@ -33,7 +33,7 @@ Overview
     :alt: PyPI Package license
     :target: https://test.pypi.org/project/porkbun-api-cli
 
-.. |version| image:: https://img.shields.io/badge/test.pypi-v0.1.2-informational?style=flat
+.. |version| image:: https://img.shields.io/badge/test.pypi-v0.2.0-informational?style=flat
     :alt: PyPI Package latest release
     :target: https://test.pypi.org/project/porkbun-api-cli
 
@@ -45,22 +45,98 @@ Overview
     :alt: Supported Python versions
     :target: https://test.pypi.org/project/porkbun-api-cli
 
-.. |commits-since| image:: https://img.shields.io/github/commits-since/breezerider/porkbun-api-cli/v0.1.2.svg
+.. |commits-since| image:: https://img.shields.io/github/commits-since/breezerider/porkbun-api-cli/v0.2.0.svg
     :alt: Commits since latest release
-    :target: https://github.com/breezerider/porkbun-api-cli/compare/v0.1.2...main
+    :target: https://github.com/breezerider/porkbun-api-cli/compare/v0.2.0...main
 
 .. end-badges
 
 CLI client for managing domain DNS records through calls to Porkbun API.
-It can create, edit and list DNS records following a configuration
-provided in a YAML file. The client is flexible and can restrict
-its operations to only a subset choosen by the user by supporting
-several operation modes:
+It creates, updates, and lists DNS records from a YAML configuration file.
+The client supports several operation modes:
 
-* append -- only new entries are created preserving existing entries unchanged
+* append  -- only create new entries, preserve existing unchanged
 * replace -- not implemented, use 'upgrade'
-* update -- only update existing entries without creating or removing entries that are not listed in the configuration
-* upgrade -- create new entries or update exising but do not remove entries that are not listed in the configuration
+* update  -- only update existing entries, do not create or remove
+* upgrade -- create new or update existing, do not remove
+
+Before any changes are made, a structured plan is printed showing what
+would happen (``NEW`` / ``UPD`` / ``OK`` rows per record). A per-domain
+summary line reports the outcome after execution. Output is colored on
+terminals that support it and respects ``NO_COLOR``.
+
+Example
+-------
+
+Create a YAML config (e.g. ``config.yml``) describing the desired records
+for ``example.org`` and several subdomains:
+
+.. code-block:: yaml
+
+    api:
+      endpoint: https://api.porkbun.com/api/json/v3
+      apikey: pk1_your_api_key
+      secretapikey: sk1_your_secret_key
+
+    domains:
+      - name: example.org
+        records:
+          - {name: "",        type: A,    content: 192.0.2.1}
+          - {name: "www",     type: A,    content: 192.0.2.1}
+          - {name: "git",     type: A,    content: 192.0.2.2}
+          - {name: "mail",    type: MX,   content: mail.example.org, prio: 10}
+          - {name: "",        type: TXT,  content: "v=spf1 -all"}
+
+Run a dry run to preview what would change::
+
+    porkbun-api-cli config.yml --mode upgrade --dry-run -vv
+
+First run (all records are new):
+
+::
+
+    dry run requested, enable verbose output
+    IP address reported by API '203.0.113.42'
+    - querying records for 'example.org' .. done
+    Plan for example.org (upgrade mode):
+      NEW  A example.org 192.0.2.1
+      NEW  A www.example.org 192.0.2.1
+      NEW  A git.example.org 192.0.2.2
+      NEW  MX example.org mail.example.org
+      NEW  TXT example.org v=spf1 -all
+    dry run requested, skipping execution
+
+Second run after changing the config (``git`` IP updated, ``www`` already
+in sync, ``docs`` is new):
+
+::
+
+    dry run requested, enable verbose output
+    IP address reported by API '203.0.113.42'
+    - querying records for 'example.org' .. done
+    Plan for example.org (upgrade mode):
+      OK   A example.org 192.0.2.1
+      OK   A www.example.org 192.0.2.1
+      UPD  A git.example.org 192.0.2.3
+      OK   MX example.org mail.example.org
+      OK   TXT example.org v=spf1 -all
+      NEW  A docs.example.org 192.0.2.1
+    dry run requested, skipping execution
+
+Apply the changes, skipping the confirmation prompt::
+
+    porkbun-api-cli config.yml --mode upgrade --yes
+
+Sample output (second config):
+
+::
+
+    IP address reported by API '203.0.113.42'
+    - querying records for 'example.org' .. done
+    Plan for example.org (upgrade mode):
+      UPD  A git.example.org 192.0.2.3
+      NEW  A docs.example.org 192.0.2.1
+    Summary for example.org: 1 created, 1 updated, 5 matched, 0 failed
 
 Command-line options
 --------------------

@@ -266,18 +266,14 @@ def main(config_file: str, mode: str, dry_run: bool, yes: bool, verbose: int) ->
     """CLI client for managing domains with Porkbun through API calls.
 
     It can create, edit and list DNS records following a configuration
-    provided in a YAML file. The client is flexible and can restrict
-    its operations to only a subset choosen by the user by supporting
-    several operation modes:
+    provided in a YAML file. The client supports several operation modes:
 
-    * append -- only new entries are created preserving existing entries
-                unchanged
+    \b
+    * append  -- only create new entries, preserve existing unchanged
     * replace -- not implemented, use 'upgrade'
-    * update -- only update existing entries without creating or removing
-                entries that are not listed in the configuration
-    * upgrade -- create new entries or update exising but do not remove
-                 entries that are not listed in the configuration
-    """  # noqa: E501
+    * update  -- only update existing entries, do not create or remove
+    * upgrade -- create new or update existing, do not remove
+    """
 
     if mode == "replace":
         raise click.UsageError("replace mode is not implemented, use 'upgrade'")
