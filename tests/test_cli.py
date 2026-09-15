@@ -128,7 +128,37 @@ def test_cli_plan_match_rows_hidden_below_verbose_2(runner, monkeypatch):
     assert result.exit_code == 0
     # match row hidden at verbose=1
     assert "OK " not in result.output
+    # ghost header suppressed: all-match plan at verbose<2 renders nothing
+    assert "Plan for example.com" not in result.output
+
+
+def test_cli_plan_header_shown_when_create_exists_even_at_verbose_0(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [
+                Operation(
+                    operation="match",
+                    existing=ExistingDnsRecord(name="m.example.com", type="A", id="1", content="x"),
+                    new=DnsRecord(name="m", type="A", content="x"),
+                ),
+                Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4")),
+            ],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append', '--yes'], color=True)
+    assert result.exit_code == 0
+    # header present because a create row renders even at verbose=0
     assert "Plan for example.com (append mode):" in result.output
+    assert "NEW" in result.output
+    # match row still hidden at verbose=0
+    assert "OK " not in result.output
 
 
 def test_cli_summary_empty_domain(runner, monkeypatch):
@@ -515,16 +545,10 @@ class TestHelpers(TestCase):
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
-        # Assertions on log calls
+        # Assertions on log calls — per-record lines removed (_render_plan owns the view now)
         expected_calls = [
-            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(1, 2, "skipping 'another.com': not included in current configuration"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
-            call(2, 2, "\t- update A-record 'www.new.com'"),
-            call(2, 2, "\t- update MX-record 'mail.new.com'"),
-            call(2, 2, "\t- update A-record 'www.replace.com'"),
-            call(3, 2, "\t- found matching A-record 'autoconfig.replace.com'"),
-            call(2, 2, "\t- create A-record 'ftp.replace.com'"),
         ]
 
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
@@ -567,12 +591,9 @@ class TestHelpers(TestCase):
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
-        # Assertions on log calls
+        # Assertions on log calls — per-record lines removed
         expected_calls = [
-            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(1, 2, "skipping 'another.com': not included in current configuration"),
-            call(2, 2, "\t- create A-record 'ftp.append.com'"),
-            call(3, 2, "\t- found matching MX-record 'mail.append.com'"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
         ]
 
@@ -616,13 +637,10 @@ class TestHelpers(TestCase):
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
-        # Assertions on log calls
+        # Assertions on log calls — per-record lines removed
         expected_calls = [
-            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(1, 2, "skipping 'another.com': not included in current configuration"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
-            call(2, 2, "\t- update A-record 'www.update.com'"),
-            call(3, 2, "\t- found matching MX-record 'mail.update.com'"),
         ]
 
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
@@ -667,14 +685,10 @@ class TestHelpers(TestCase):
         self.assertIn("another.com", result)
         self.assertTrue(result["another.com"] is None)
 
-        # Assertions on log calls
+        # Assertions on log calls — per-record lines removed
         expected_calls = [
-            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(1, 2, "skipping 'another.com': not included in current configuration"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
-            call(2, 2, "\t- update A-record 'www.upgrade.com'"),
-            call(2, 2, "\t- create A-record 'ftp.upgrade.com'"),
-            call(3, 2, "\t- found matching MX-record 'mail.upgrade.com'"),
         ]
 
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
@@ -703,9 +717,7 @@ class TestHelpers(TestCase):
         self.assertEqual(result["match.com"][0].new.name, "www")
         self.assertEqual(result["match.com"][0].existing.id, "m1")
         expected_calls = [
-            call(1, 3, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(0, 3, "skipping 'fail.com': querying existing records failed"),
-            call(3, 3, "\t- found matching A-record 'www.match.com'"),
         ]
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
 
@@ -732,7 +744,6 @@ class TestHelpers(TestCase):
         self.assertEqual(result["ttl.com"][0].operation, "match")
         self.assertEqual(result["ttl.com"][0].new.name, "www")
         expected_calls = [
-            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
             call(
                 0,
@@ -740,7 +751,6 @@ class TestHelpers(TestCase):
                 "ttl=0 in config treated as 'use default'; ttl comparison skipped for www.ttl.com",
                 file=sys.stderr,
             ),
-            call(3, 2, "\t- found matching A-record 'www.ttl.com'"),
         ]
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
 
@@ -767,7 +777,6 @@ class TestHelpers(TestCase):
         self.assertEqual(result["prio.com"][0].operation, "match")
         self.assertEqual(result["prio.com"][0].new.name, "mail")
         expected_calls = [
-            call(1, 2, "\n\tPROCESSING EXISTING RECORDS\n"),
             call(0, 2, "skipping 'fail.com': querying existing records failed"),
             call(
                 0,
@@ -775,7 +784,6 @@ class TestHelpers(TestCase):
                 "prio omitted in config; server returned prio=10 for mail.prio.com",
                 file=sys.stderr,
             ),
-            call(3, 2, "\t- found matching MX-record 'mail.prio.com'"),
         ]
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
 
@@ -858,3 +866,75 @@ class TestHelpers(TestCase):
         ]
 
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
+
+
+# --- Coverage: branches uncovered after plan-dedup ---
+
+
+def test_cli_colorize_emits_ansi_on_tty(monkeypatch):
+    monkeypatch.setattr(cli.sys.stdout, "isatty", lambda: True)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert "\x1b[" in cli._colorize("NEW", "green")
+
+
+def test_cli_colorize_plain_when_no_color(monkeypatch):
+    monkeypatch.setattr(cli.sys.stdout, "isatty", lambda: True)
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert cli._colorize("NEW", "green") == "NEW"
+
+
+def test_cli_render_plan_skips_none_operations(capsys):
+    cli._render_plan("append", 2, {"skipped.com": None})
+    assert "Plan for" not in capsys.readouterr().out
+
+
+def test_cli_render_plan_skips_unknown_operation(capsys):
+    cli._render_plan(
+        "append",
+        2,
+        {"example.com": [Operation(operation="delete", new=None, existing=None)]},
+    )
+    assert "Plan for" not in capsys.readouterr().out
+
+
+def test_cli_render_summary_skips_none():
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        cli._render_summary("x.com", None, verbose=2)
+    assert buf.getvalue() == ""
+
+
+def test_cli_execute_skips_none_operations():
+    mock_api = Mock()
+    plan = {"skipped.com": None}
+    result = cli._execute_operations_plan(mock_api, 2, plan)
+    assert result == {}
+    mock_api.create_record.assert_not_called()
+
+
+def test_cli_execute_skips_match_entries():
+    mock_api = Mock()
+    plan = {
+        "example.com": [
+            Operation(
+                operation="match",
+                existing=ExistingDnsRecord(name="m.example.com", type="A", id="1", content="x"),
+                new=DnsRecord(name="m", type="A", content="x"),
+            ),
+        ],
+    }
+    result = cli._execute_operations_plan(mock_api, 2, plan)
+    assert result == {}
+    mock_api.create_record.assert_not_called()
+    mock_api.update_record.assert_not_called()
+
+
+def test_cli_config_load_failure_exit_1(runner, tmp_path):
+    bad_config = tmp_path / "bad.yml"
+    bad_config.write_text("api:\n  apikey: 'x'\n")  # missing secretapikey + endpoint + domains
+    result = runner.invoke(cli.main, [str(bad_config), '--yes'])
+    assert result.exit_code == 1
+    assert "failed to load configuration" in (result.stderr or "")
