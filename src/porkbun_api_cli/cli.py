@@ -76,7 +76,6 @@ def _plan_operations(
 ) -> dict[str, list[PlanEntry] | None]:
     all_domain_names = sorted({*existing_domains.keys(), *config_domains.keys()})
 
-    _log_if_level(1, verbose, "\n\tPROCESSING EXISTING RECORDS\n")
     planned_operations = {}
     for domain_name in all_domain_names:
         existing_dns_records = existing_domains.get(domain_name, None)
@@ -92,7 +91,6 @@ def _plan_operations(
             continue
 
         operations: list[PlanEntry] = []
-        processed = []
         for target_record in config_dns_records:
             existing = [
                 x for x in existing_dns_records if utils.compare_record_by_name_type(domain_name, target_record, x)
@@ -100,7 +98,6 @@ def _plan_operations(
             existing_found = False
             for entry in existing:
                 existing_found = True
-                processed.append(entry)
                 target_fqdn = f"{target_record.name}.{domain_name}" if len(target_record.name) else domain_name
                 if utils.compare_record_by_content_ttl_prio(target_record, entry):
                     if target_record.ttl == 0:
@@ -117,22 +114,10 @@ def _plan_operations(
                             f"prio omitted in config; server returned prio={entry.prio} for {target_fqdn}",
                             file=sys.stderr,
                         )
-                    _log_if_level(
-                        3,
-                        verbose,
-                        f"\t- found matching {target_record.type}-record '{target_fqdn}'",
-                    )
                     operations.append(PlanEntry(operation="match", new=target_record, existing=entry))
                 elif utils.operation_allowed_by_mode("update", mode):
-                    _log_if_level(
-                        2,
-                        verbose,
-                        f"\t- update {target_record.type}-record '{target_fqdn}'",
-                    )
                     operations.append(PlanEntry(operation="update", new=target_record, existing=entry))
             if not existing_found and utils.operation_allowed_by_mode("create", mode):
-                target_fqdn = f"{target_record.name}.{domain_name}" if len(target_record.name) else domain_name
-                _log_if_level(2, verbose, f"\t- create {target_record.type}-record '{target_fqdn}'")
                 operations.append(PlanEntry(operation="create", new=target_record, existing=None))
 
         planned_operations[domain_name] = operations
@@ -189,7 +174,7 @@ def _render_plan(
     for domain, operations in operations_plan.items():
         if operations is None:
             continue
-        click.echo(f"Plan for {domain} ({mode} mode):")
+        rows: list[str] = []
         for entry in operations:
             op = entry.operation
             if op == "match":
@@ -202,15 +187,16 @@ def _render_plan(
                 symbol = "UPD"
             else:
                 continue
-            if op == "match":
-                rec = entry.new
-                assert rec is not None
-            else:
-                rec = entry.new
-                assert rec is not None
+            rec = entry.new
+            # ty: narrow — new is non-None for create/update/match entries
+            assert rec is not None
             fqdn = f"{rec.name}.{domain}" if len(rec.name) else domain
             content = f"{rec.type} {fqdn} {rec.content}"
-            click.echo(f"  {_colorize(symbol, _SYMBOL_COLORS[symbol])}  {content}")
+            rows.append(f"  {_colorize(symbol, _SYMBOL_COLORS[symbol])}  {content}")
+        if rows:
+            click.echo(f"Plan for {domain} ({mode} mode):")
+            for row in rows:
+                click.echo(row)
 
 
 def _render_summary(
