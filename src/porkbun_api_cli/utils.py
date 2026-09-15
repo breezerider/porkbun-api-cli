@@ -119,7 +119,6 @@ def operation_allowed_by_mode(operation: str, mode: str) -> bool:
     """Check whether an operation is allowed by current operation mode. Supported operations:
 
     * create
-    * replace
     * update
     * upgrade
 
@@ -135,8 +134,6 @@ def operation_allowed_by_mode(operation: str, mode: str) -> bool:
         return operation == "update"
     elif mode == "upgrade":
         return operation in ["create", "update"]
-    elif mode == "replace":
-        return operation in ["create", "update", "delete"]
     return False
 
 

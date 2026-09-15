@@ -190,9 +190,6 @@ def test_dns_record_from_api_filters_unknown_and_warns(capsys):
         ("update", "update"),
         ("upgrade", "create"),
         ("upgrade", "update"),
-        ("replace", "create"),
-        ("replace", "update"),
-        ("replace", "delete"),
     ],
 )
 def test_operation_allowed_by_mode_allowed(operation, mode):

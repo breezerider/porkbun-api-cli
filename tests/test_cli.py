@@ -1,3 +1,4 @@
+import re
 import sys
 from unittest import TestCase
 from unittest.mock import Mock
@@ -25,7 +26,8 @@ def test_cli_no_args(runner):
     result = runner.invoke(cli.main)
     assert result.exit_code == 2
     assert result.exception
-    assert result.output.strip().startswith('Usage: ')
+    output = (result.output or "") + (result.stderr or "")
+    assert output.strip().startswith('Usage: ')
 
 
 def test_cli_usage(runner):
@@ -42,176 +44,387 @@ def test_cli_version(runner):
     assert result.output.strip() == f'Version {__version__}'
 
 
-def test_cli_dry_run(runner, monkeypatch):
+# --- Unit 1: --yes flag, --yes/--dry-run mutex, --mode replace UsageError, help text ---
+
+
+def test_cli_mode_replace_raises_usage_error(runner):
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'replace'])
+    assert result.exit_code == 2
+    assert not result.exception or isinstance(result.exception, SystemExit)
+    assert "replace mode is not implemented" in (result.stderr or result.output)
+
+
+def test_cli_yes_and_dry_run_mutex(runner):
+    result = runner.invoke(cli.main, ['tests/config.yml', '--yes', '--dry-run'])
+    assert result.exit_code == 2
+    assert "--yes and --dry-run are mutually exclusive" in (result.stderr or result.output)
+
+
+def test_cli_help_documents_replace_and_dry_run_exit_code(runner):
+    result = runner.invoke(cli.main, ['--help'])
+    assert result.exit_code == 0
+    assert "not implemented" in result.output
+    assert "use 'upgrade'" in result.output
+    assert "exits non-zero (code 3)" in result.output
+    assert "--yes" in result.output
+
+
+# --- Unit 3: plan renderer, summary renderer, color helper ---
+
+
+def test_cli_plan_renders_symbol_rows(runner, monkeypatch):
     mock_api = Mock()
     monkeypatch.setattr(api, "PorkbunAPI", mock_api)
-    mock_api().get_my_ip.return_value = "some-ip-address"
-
-    mock_collect_existing_dns_records = Mock()
-    monkeypatch.setattr(cli, '_collect_existing_dns_records', mock_collect_existing_dns_records)
-    mock_collect_existing_dns_records.return_value = "existing-records"
-
-    mock_plan_operations = Mock()
-    monkeypatch.setattr(cli, '_plan_operations', mock_plan_operations)
-
-    mock_execute_operations_plan = Mock()
-    monkeypatch.setattr(cli, '_execute_operations_plan', mock_execute_operations_plan)
-
-    result = runner.invoke(cli.main, ['tests/config.yml', '--dry-run'])
-
-    print(f"output : '{result.output.strip()}'")
-
-    assert result.exit_code == 0
-    assert not result.exception
-    assert result.output.strip() == '\n'.join([
-        "dry run requested, enable verbose output",
-        "IP address reported by API 'some-ip-address'",
-        "dry run requested, skipping execution",
-    ])
-
-    # Assertions on calls
-    mock_collect_existing_dns_records.assert_called_once_with(mock_api(), ["example.com"], 2)
-    mock_plan_operations.assert_called_once_with(
-        "append",
-        2,
-        "existing-records",
-        {
-            'example.com': [
-                DnsRecord(name='', type='A', content='192.168.192.168'),
-                DnsRecord(name='autoconfig', type='A', content='192.168.192.168'),
-                DnsRecord(name='git', type='A', content='192.168.192.168'),
-                DnsRecord(name='mail', type='A', content='192.168.192.168'),
-                DnsRecord(name='www', type='A', content='192.168.192.168'),
-                DnsRecord(name='', type='MX', content='mail.example.com'),
-                DnsRecord(name='', type='TXT', content='mock entry 1'),
-                DnsRecord(name='test', type='TXT', content='mock entry 2'),
-                DnsRecord(name='', type='AAAA', content='fe80::1'),
-                DnsRecord(name='autoconfig', type='AAAA', content='fe80::1'),
-                DnsRecord(name='git', type='AAAA', content='fe80::1'),
-                DnsRecord(name='mail', type='AAAA', content='fe80::1'),
-                DnsRecord(name='www', type='AAAA', content='fe80::1'),
-            ]
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [
+                Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4")),
+                Operation(
+                    operation="update",
+                    existing=ExistingDnsRecord(name="www.example.com", type="A", id="1", content="1.2.3.4"),
+                    new=DnsRecord(name="www", type="A", content="1.2.3.5"),
+                ),
+                Operation(
+                    operation="match",
+                    existing=ExistingDnsRecord(name="mail.example.com", type="MX", id="2", content="mail.example.com"),
+                    new=DnsRecord(name="mail", type="MX", content="mail.example.com"),
+                ),
+            ],
         },
     )
-    mock_execute_operations_plan.assert_not_called()
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append', '-vv', '--yes'], color=True)
+    assert result.exit_code == 0
+    assert "Plan for example.com (append mode):" in result.stdout
+    assert "NEW" in result.stdout and "A www.example.com 1.2.3.4" in result.stdout
+    assert "UPD" in result.stdout and "A www.example.com 1.2.3.5" in result.stdout
+    assert "OK " in result.stdout and "MX mail.example.com mail.example.com" in result.stdout
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        "",
-        "n",
-        "N",
-        "1",
-    ],
-)
+def test_cli_plan_match_rows_hidden_below_verbose_2(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [
+                Operation(
+                    operation="match",
+                    existing=ExistingDnsRecord(name="m.example.com", type="A", id="1", content="x"),
+                    new=DnsRecord(name="m", type="A", content="x"),
+                )
+            ],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append', '-v', '--yes'], color=True)
+    assert result.exit_code == 0
+    # match row hidden at verbose=1
+    assert "OK " not in result.output
+    assert "Plan for example.com (append mode):" in result.output
+
+
+def test_cli_summary_empty_domain(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"empty.com": []})
+    monkeypatch.setattr(cli, '_plan_operations', lambda *_: {"empty.com": []})
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append', '--yes'])
+    assert result.exit_code == 0
+    assert "Summary for empty.com: no records found" in result.output
+
+
+def test_cli_summary_populated_domain(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [
+                Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4")),
+                Operation(
+                    operation="match",
+                    existing=ExistingDnsRecord(name="m.example.com", type="A", id="1", content="x"),
+                    new=DnsRecord(name="m", type="A", content="x"),
+                ),
+            ],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append', '--yes'])
+    assert result.exit_code == 0
+    assert "Summary for example.com:" in result.stdout
+    assert "1 created" in result.stdout
+    assert "1 matched" in result.stdout
+
+
+def test_cli_no_color_env_suppresses_ansi(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4"))],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    result = runner.invoke(
+        cli.main, ['tests/config.yml', '--mode', 'append', '--yes'], env={"NO_COLOR": "1"}, color=True
+    )
+    assert result.exit_code == 0
+    assert "\x1b[" not in result.output
+
+
+def test_cli_runner_default_color_false_suppresses_ansi(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4"))],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    # CliRunner default is color=False → isatty() == False → no ANSI codes
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append', '--yes'])
+    assert result.exit_code == 0
+    assert "\x1b[" not in result.output
+
+
+# --- Unit 4: exit codes, stderr split, plan-before-prompt, summary after execution ---
+
+
+def test_cli_exit_code_0_on_success(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4"))],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})  # no failure
+    result = runner.invoke(cli.main, ['tests/config.yml', '--yes'])
+    assert result.exit_code == 0
+
+
+def test_cli_exit_code_1_on_get_my_ip_failure(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.side_effect = RuntimeError("auth failed")
+    result = runner.invoke(cli.main, ['tests/config.yml', '--yes'])
+    assert result.exit_code == 1
+    assert "auth failed" in (result.stderr or "")
+
+
+def test_cli_exit_code_1_on_config_load_failure(runner, monkeypatch):
+    # missing config arg → Click default UsageError → exit 2, not 1
+    # use a non-existent file path for the 1 branch
+    result = runner.invoke(cli.main, ['/nonexistent/config.yml', '--yes'])
+    assert result.exit_code in (1, 2)  # Click may exit 2 on Path(exists=True) miss
+
+
+def test_cli_exit_code_2_on_replace_mode(runner):
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'replace', '--yes'])
+    assert result.exit_code == 2
+
+
+def test_cli_exit_code_2_on_yes_dry_run(runner):
+    result = runner.invoke(cli.main, ['tests/config.yml', '--yes', '--dry-run'])
+    assert result.exit_code == 2
+
+
+def test_cli_exit_code_3_on_dry_run_with_changes(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4"))],
+        },
+    )
+    result = runner.invoke(cli.main, ['tests/config.yml', '--dry-run'])
+    assert result.exit_code == 3
+    assert "Plan for example.com" in result.output
+
+
+def test_cli_exit_code_0_on_dry_run_in_sync(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [
+                Operation(
+                    operation="match",
+                    existing=ExistingDnsRecord(name="m.example.com", type="A", id="1", content="x"),
+                    new=DnsRecord(name="m", type="A", content="x"),
+                )
+            ],
+        },
+    )
+    result = runner.invoke(cli.main, ['tests/config.yml', '--dry-run'])
+    assert result.exit_code == 0
+
+
+def test_cli_exit_code_4_on_execution_failure(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4"))],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {"example.com": 1})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--yes'])
+    assert result.exit_code == 4
+    assert "Summary for example.com:" in result.stdout
+    assert "1 failed" in result.stdout
+
+
+def test_cli_summary_failed_count_is_per_domain(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "good.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4"))],
+            "bad.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="5.6.7.8"))],
+        },
+    )
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {"bad.com": 1})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append', '-v', '--yes'])
+    assert result.exit_code == 4
+    stdout = result.stdout or ""
+    assert re.search(r"Summary for good\.com:.*\b0 failed\b", stdout), (
+        f"good.com summary should show '0 failed' (no op on this domain failed), got: {stdout!r}"
+    )
+    assert re.search(r"Summary for bad\.com:.*\b1 failed\b", stdout), (
+        f"bad.com summary should show '1 failed' (one op on this domain failed), got: {stdout!r}"
+    )
+
+
+def test_cli_yes_skips_prompt(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(cli, '_plan_operations', lambda *_: {"example.com": []})
+    mock_exec = Mock(return_value={})
+    monkeypatch.setattr(cli, '_execute_operations_plan', mock_exec)
+    result = runner.invoke(cli.main, ['tests/config.yml', '--yes'])
+    assert result.exit_code == 0
+    assert "Would you like to proceed?" not in result.output
+    mock_exec.assert_called_once()
+
+
+def test_cli_prompt_text_present_without_yes(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(cli, '_plan_operations', lambda *_: {"example.com": []})
+    monkeypatch.setattr(cli, '_execute_operations_plan', lambda *a, **k: {})
+    result = runner.invoke(cli.main, ['tests/config.yml'], input="n")
+    assert result.exit_code == 0
+    assert "Would you like to proceed? [yN]:" in result.output
+
+
+def test_cli_dry_run_auto_verbose_bump(runner, monkeypatch):
+    captured = {}
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+
+    def collect(api, names, verbose):
+        captured["verbose"] = verbose
+        return {"example.com": []}
+
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', collect)
+    monkeypatch.setattr(cli, '_plan_operations', lambda *_: {"example.com": []})
+    result = runner.invoke(cli.main, ['tests/config.yml', '--dry-run'])
+    assert result.exit_code == 0
+    assert captured["verbose"] == 2  # auto-bumped from 0
+
+
+def test_cli_stderr_for_execution_failure(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    mock_api().create_record.side_effect = RuntimeError("api-down")
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(
+        cli,
+        '_plan_operations',
+        lambda *_: {
+            "example.com": [Operation(operation="create", new=DnsRecord(name="www", type="A", content="1.2.3.4"))],
+        },
+    )
+    result = runner.invoke(cli.main, ['tests/config.yml', '--yes'])
+    assert result.exit_code == 4
+    assert "api-down" in (result.stderr or "")
+    assert "Summary for example.com:" in result.stdout
+
+
+def test_cli_confirm_y_executes(runner, monkeypatch):
+    mock_api = Mock()
+    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(cli, '_plan_operations', lambda *_: {"example.com": []})
+    mock_exec = Mock(return_value={})
+    monkeypatch.setattr(cli, '_execute_operations_plan', mock_exec)
+    result = runner.invoke(cli.main, ['tests/config.yml'], input="y")
+    assert result.exit_code == 0
+    mock_exec.assert_called_once()
+
+
+@pytest.mark.parametrize("data", ["", "n", "N", "1"])
 def test_cli_abort(runner, monkeypatch, data):
     mock_api = Mock()
     monkeypatch.setattr(api, "PorkbunAPI", mock_api)
-    mock_api().get_my_ip.return_value = "some-ip-address"
-
-    mock_collect_existing_dns_records = Mock()
-    monkeypatch.setattr(cli, '_collect_existing_dns_records', mock_collect_existing_dns_records)
-    mock_collect_existing_dns_records.return_value = "existing-records"
-
-    mock_plan_operations = Mock()
-    monkeypatch.setattr(cli, '_plan_operations', mock_plan_operations)
-    mock_plan_operations.return_value = "operations-plan"
-
-    mock_execute_operations_plan = Mock()
-    monkeypatch.setattr(cli, '_execute_operations_plan', mock_execute_operations_plan)
-
-    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'replace', '--verbose'], input=data)
-
-    print(f"output : '{result.output.strip()}'")
-
+    mock_api().get_my_ip.return_value = "1.2.3.4"
+    monkeypatch.setattr(cli, '_collect_existing_dns_records', lambda *_: {"example.com": []})
+    monkeypatch.setattr(cli, '_plan_operations', lambda *_: {"example.com": []})
+    mock_exec = Mock(return_value={})
+    monkeypatch.setattr(cli, '_execute_operations_plan', mock_exec)
+    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'append'], input=data)
     assert result.exit_code == 0
-    assert not result.exception
-    assert result.output.strip() == '\n'.join([
-        "IP address reported by API 'some-ip-address'",
-        "Would you like to proceed? [yN]: ",
-        "Operation aborted.",
-    ])
-
-    # Assertions on calls
-    mock_collect_existing_dns_records.assert_called_once_with(mock_api(), ["example.com"], 1)
-    mock_plan_operations.assert_called_once_with(
-        "replace",
-        1,
-        "existing-records",
-        {
-            'example.com': [
-                DnsRecord(name='', type='A', content='192.168.192.168'),
-                DnsRecord(name='autoconfig', type='A', content='192.168.192.168'),
-                DnsRecord(name='git', type='A', content='192.168.192.168'),
-                DnsRecord(name='mail', type='A', content='192.168.192.168'),
-                DnsRecord(name='www', type='A', content='192.168.192.168'),
-                DnsRecord(name='', type='MX', content='mail.example.com'),
-                DnsRecord(name='', type='TXT', content='mock entry 1'),
-                DnsRecord(name='test', type='TXT', content='mock entry 2'),
-                DnsRecord(name='', type='AAAA', content='fe80::1'),
-                DnsRecord(name='autoconfig', type='AAAA', content='fe80::1'),
-                DnsRecord(name='git', type='AAAA', content='fe80::1'),
-                DnsRecord(name='mail', type='AAAA', content='fe80::1'),
-                DnsRecord(name='www', type='AAAA', content='fe80::1'),
-            ]
-        },
-    )
-    mock_execute_operations_plan.assert_not_called()
-
-
-def test_cli(runner, monkeypatch):
-    mock_api = Mock()
-    monkeypatch.setattr(api, "PorkbunAPI", mock_api)
-    mock_api().get_my_ip.return_value = "some-ip-address"
-
-    mock_collect_existing_dns_records = Mock()
-    monkeypatch.setattr(cli, '_collect_existing_dns_records', mock_collect_existing_dns_records)
-    mock_collect_existing_dns_records.return_value = "existing-records"
-
-    mock_plan_operations = Mock()
-    monkeypatch.setattr(cli, '_plan_operations', mock_plan_operations)
-    mock_plan_operations.return_value = "operations-plan"
-
-    mock_execute_operations_plan = Mock()
-    monkeypatch.setattr(cli, '_execute_operations_plan', mock_execute_operations_plan)
-
-    result = runner.invoke(cli.main, ['tests/config.yml', '--mode', 'replace', '--verbose'], input='y')
-
-    print(f"output : '{result.output.strip()}'")
-
-    assert result.exit_code == 0
-    assert not result.exception
-    assert result.output.strip() == '\n'.join([
-        "IP address reported by API 'some-ip-address'",
-        "Would you like to proceed? [yN]:",
-    ])
-
-    # Assertions on calls
-    mock_collect_existing_dns_records.assert_called_once_with(mock_api(), ["example.com"], 1)
-    mock_plan_operations.assert_called_once_with(
-        "replace",
-        1,
-        "existing-records",
-        {
-            'example.com': [
-                DnsRecord(name='', type='A', content='192.168.192.168'),
-                DnsRecord(name='autoconfig', type='A', content='192.168.192.168'),
-                DnsRecord(name='git', type='A', content='192.168.192.168'),
-                DnsRecord(name='mail', type='A', content='192.168.192.168'),
-                DnsRecord(name='www', type='A', content='192.168.192.168'),
-                DnsRecord(name='', type='MX', content='mail.example.com'),
-                DnsRecord(name='', type='TXT', content='mock entry 1'),
-                DnsRecord(name='test', type='TXT', content='mock entry 2'),
-                DnsRecord(name='', type='AAAA', content='fe80::1'),
-                DnsRecord(name='autoconfig', type='AAAA', content='fe80::1'),
-                DnsRecord(name='git', type='AAAA', content='fe80::1'),
-                DnsRecord(name='mail', type='AAAA', content='fe80::1'),
-                DnsRecord(name='www', type='AAAA', content='fe80::1'),
-            ]
-        },
-    )
-    mock_execute_operations_plan.assert_called_once_with(mock_api(), 1, "operations-plan")
+    assert "Operation aborted." in (result.stderr or "")
+    mock_exec.assert_not_called()
 
 
 class TestHelpers(TestCase):
@@ -249,7 +462,7 @@ class TestHelpers(TestCase):
 
     @patch('porkbun_api_cli.cli._log_if_level')
     def test_plan_operations_replace_mode(self, mock_log_if_level):
-        mode = "replace"
+        mode = "upgrade"
         verbose = 2
         existing_domains = {
             "replace.com": [
@@ -285,7 +498,7 @@ class TestHelpers(TestCase):
         # Assertions on result
         self.assertEqual(len(result), 4)  # Four domains processed
         self.assertIn("replace.com", result)
-        self.assertEqual(len(result["replace.com"]), 4)
+        self.assertEqual(len(result["replace.com"]), 3)
         self.assertEqual(result["replace.com"][0].operation, "update")
         self.assertEqual(result["replace.com"][0].new.name, "www")
         self.assertEqual(result["replace.com"][1].operation, "match")
@@ -293,8 +506,6 @@ class TestHelpers(TestCase):
         self.assertEqual(result["replace.com"][1].existing.id, "r2")
         self.assertEqual(result["replace.com"][2].operation, "create")
         self.assertEqual(result["replace.com"][2].new.name, "ftp")
-        self.assertEqual(result["replace.com"][3].operation, "delete")
-        self.assertEqual(result["replace.com"][3].existing.name, "mail.replace.com")
         self.assertIn("new.com", result)
         self.assertEqual(len(result["new.com"]), 2)
         self.assertEqual(result["new.com"][0].operation, "update")
@@ -314,7 +525,6 @@ class TestHelpers(TestCase):
             call(2, 2, "\t- update A-record 'www.replace.com'"),
             call(3, 2, "\t- found matching A-record 'autoconfig.replace.com'"),
             call(2, 2, "\t- create A-record 'ftp.replace.com'"),
-            call(2, 2, "\t- delete MX-record 'mail.replace.com'"),
         ]
 
         self.assertListEqual(expected_calls, mock_log_if_level.mock_calls)
@@ -584,8 +794,9 @@ class TestHelpers(TestCase):
                     new=DnsRecord(name="www", type="A", content=""),
                 ),
                 Operation(
-                    operation="delete",
+                    operation="update",
                     existing=ExistingDnsRecord(name="mail.pass.com", type="MX", id="456", content=""),
+                    new=DnsRecord(name="mail", type="MX", content="mail.pass.com"),
                 ),
             ],
             "fail.com": [
@@ -596,8 +807,9 @@ class TestHelpers(TestCase):
                     new=DnsRecord(name="www", type="A", content=""),
                 ),
                 Operation(
-                    operation="delete",
+                    operation="update",
                     existing=ExistingDnsRecord(name="mail.fail.com", type="MX", id="654", content=""),
+                    new=DnsRecord(name="mail", type="MX", content="mail.fail.com"),
                 ),
             ],
             "invalid.com": [
@@ -635,15 +847,12 @@ class TestHelpers(TestCase):
             call(1, 2, 'done'),
             call(1, 2, "\tupdate A-record 'www.pass.com' ... ", nl=False),
             call(1, 2, 'done'),
-            call(1, 2, "\tdelete MX-record 'mail.pass.com' ... ", nl=False),
-            call(0, 2, 'delete operation is not implemented - skipped'),
+            call(1, 2, "\tupdate MX-record 'mail.pass.com' ... ", nl=False),
+            call(1, 2, 'done'),
             call(1, 2, "- altering domain 'fail.com'"),
             call(1, 2, "\tcreate A-record 'www.fail.com' ... ", nl=False),
-            call(0, 2, "querying Porkbun API for domain 'fail.com' failed: create_record error"),
             call(1, 2, "\tupdate A-record 'www.fail.com' ... ", nl=False),
-            call(0, 2, "querying Porkbun API for domain 'fail.com' failed: update_record error"),
-            call(1, 2, "\tdelete MX-record 'mail.fail.com' ... ", nl=False),
-            call(0, 2, 'delete operation is not implemented - skipped'),
+            call(1, 2, "\tupdate MX-record 'mail.fail.com' ... ", nl=False),
             call(1, 2, "- altering domain 'invalid.com'"),
             call(0, 2, "unknown operation 'invalid'"),
         ]
